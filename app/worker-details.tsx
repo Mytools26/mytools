@@ -17,7 +17,7 @@ import { exportPdf } from "./utils/pdf";
 export default function WorkerDetailsScreen() {
   const { workerName } = useLocalSearchParams();
 
-  const tools = useToolStore((state) => state.tools);
+  const tools = useToolStore((state) => state.tools || []);
   const deleteTool = useToolStore((state) => state.deleteTool);
   const updateTool = useToolStore((state) => state.updateTool);
   const returnTool = useToolStore((state) => state.returnTool);
@@ -28,15 +28,21 @@ export default function WorkerDetailsScreen() {
   const workerNameText = String(workerName || "Unknown worker");
 
   const workerTools = tools.filter(
-    (tool) => tool.borrowedBy === workerName || tool.holder === workerName
+    (tool) =>
+      tool.borrowedBy === workerName ||
+      tool.holder === workerName
   );
 
   const location =
-    workerTools.find((tool) => tool.location)?.location || "No location";
+    workerTools.find((tool) => tool.location)?.location ||
+    "No location";
 
   const exportWorkerPdf = async () => {
     if (workerTools.length === 0) {
-      Alert.alert("No tools", "This worker has no assigned tools.");
+      Alert.alert(
+        "No tools",
+        "This worker has no assigned tools."
+      );
       return;
     }
 
@@ -69,12 +75,20 @@ export default function WorkerDetailsScreen() {
               <th style="border: 1px solid #333; padding: 8px;">Qty</th>
               <th style="border: 1px solid #333; padding: 8px;">Status</th>
             </tr>
+
             ${rows}
           </table>
 
           <div style="margin-top: 60px;">
-            <p><strong>Worker Signature:</strong> __________________________</p>
-            <p><strong>Manager Signature:</strong> _________________________</p>
+            <p>
+              <strong>Worker Signature:</strong>
+              __________________________
+            </p>
+
+            <p>
+              <strong>Manager Signature:</strong>
+              _________________________
+            </p>
           </div>
         </body>
       </html>
@@ -83,30 +97,79 @@ export default function WorkerDetailsScreen() {
     await exportPdf(html);
   };
 
-  const handleDelete = (toolId?: string, toolName?: string) => {
+  const handleDelete = (
+    toolId?: string,
+    toolName?: string
+  ) => {
     if (!toolId) return;
 
-    Alert.alert("Delete Tool", `Remove ${toolName}?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => deleteTool(toolId),
-      },
-    ]);
+    Alert.alert(
+      "Delete Tool",
+      `Remove ${toolName}?`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => deleteTool(toolId),
+        },
+      ]
+    );
   };
 
-  const handleReturn = (toolId: string, toolName: string) => {
-    Alert.alert("Return Tool", `Return ${toolName} to warehouse?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Return",
-        onPress: () => returnTool(toolId),
-      },
-    ]);
+  const handleReturn = (
+    toolId: string,
+    toolName: string
+  ) => {
+    Alert.alert(
+      "Return Tool",
+      `Return ${toolName} to warehouse?`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Return",
+          onPress: () => returnTool(toolId),
+        },
+      ]
+    );
   };
 
-  const startEdit = (toolId: string, quantity: string) => {
+  const handleReturnAll = () => {
+    if (workerTools.length === 0) return;
+
+    Alert.alert(
+      "Return All Tools",
+      `Return all tools from ${workerNameText} to warehouse?`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Return All",
+          onPress: () => {
+            workerTools.forEach((tool, index) => {
+              const realId =
+                tool.id || `old-tool-${index}`;
+
+              returnTool(realId);
+            });
+          },
+        },
+      ]
+    );
+  };
+
+  const startEdit = (
+    toolId: string,
+    quantity: string
+  ) => {
     setEditingId(toolId);
     setNewQuantity(quantity || "");
   };
@@ -125,32 +188,68 @@ export default function WorkerDetailsScreen() {
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.title}>{workerNameText}</Text>
+      <Text style={styles.title}>
+        {workerNameText}
+      </Text>
 
       <View style={styles.summaryCard}>
-        <Text style={styles.summaryLabel}>Project / Location</Text>
-        <Text style={styles.summaryValue}>{location}</Text>
+        <Text style={styles.summaryLabel}>
+          Project / Location
+        </Text>
 
-        <Text style={styles.summaryLabel}>Assigned tools</Text>
-        <Text style={styles.summaryValue}>{workerTools.length}</Text>
+        <Text style={styles.summaryValue}>
+          {location}
+        </Text>
 
-        <TouchableOpacity style={styles.pdfButton} onPress={exportWorkerPdf}>
-          <Text style={styles.pdfButtonText}>Export PDF</Text>
+        <Text style={styles.summaryLabel}>
+          Assigned tools
+        </Text>
+
+        <Text style={styles.summaryValue}>
+          {workerTools.length}
+        </Text>
+
+        <TouchableOpacity
+          style={styles.pdfButton}
+          onPress={exportWorkerPdf}
+        >
+          <Text style={styles.pdfButtonText}>
+            Export PDF
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.returnAllButton}
+          onPress={handleReturnAll}
+        >
+          <Text style={styles.pdfButtonText}>
+            Return All Tools
+          </Text>
         </TouchableOpacity>
       </View>
 
       {workerTools.length === 0 ? (
-        <Text style={styles.emptyText}>No tools assigned</Text>
+        <Text style={styles.emptyText}>
+          No tools assigned
+        </Text>
       ) : (
         <View style={styles.listCard}>
           {workerTools.map((tool, index) => {
-            const realId = tool.id || `old-tool-${index}`;
-            const isEditing = editingId === realId;
+            const realId =
+              tool.id || `old-tool-${index}`;
+
+            const isEditing =
+              editingId === realId;
 
             return (
-              <View key={realId} style={styles.toolCard}>
+              <View
+                key={realId}
+                style={styles.toolCard}
+              >
                 <View style={styles.toolRow}>
-                  <Text style={styles.toolName}>{tool.name}</Text>
+                  <Text style={styles.toolName}>
+                    {tool.name}
+                  </Text>
 
                   {isEditing ? (
                     <TextInput
@@ -160,7 +259,9 @@ export default function WorkerDetailsScreen() {
                       keyboardType="numeric"
                     />
                   ) : (
-                    <Text style={styles.quantity}>x{tool.quantity || "0"}</Text>
+                    <Text style={styles.quantity}>
+                      x{tool.quantity || "0"}
+                    </Text>
                   )}
                 </View>
 
@@ -168,9 +269,16 @@ export default function WorkerDetailsScreen() {
                   <View style={styles.actionRow}>
                     <TouchableOpacity
                       style={styles.saveButton}
-                      onPress={() => saveEdit({ ...tool, id: realId })}
+                      onPress={() =>
+                        saveEdit({
+                          ...tool,
+                          id: realId,
+                        })
+                      }
                     >
-                      <Text style={styles.actionText}>Save</Text>
+                      <Text style={styles.actionText}>
+                        Save
+                      </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -180,30 +288,53 @@ export default function WorkerDetailsScreen() {
                         setNewQuantity("");
                       }}
                     >
-                      <Text style={styles.actionText}>Cancel</Text>
+                      <Text style={styles.actionText}>
+                        Cancel
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 ) : (
                   <View style={styles.actionRow}>
                     <TouchableOpacity
                       style={styles.editButton}
-                      onPress={() => startEdit(realId, tool.quantity || "")}
+                      onPress={() =>
+                        startEdit(
+                          realId,
+                          tool.quantity || ""
+                        )
+                      }
                     >
-                      <Text style={styles.actionText}>Edit</Text>
+                      <Text style={styles.actionText}>
+                        Edit
+                      </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
                       style={styles.returnButton}
-                      onPress={() => handleReturn(realId, tool.name)}
+                      onPress={() =>
+                        handleReturn(
+                          realId,
+                          tool.name
+                        )
+                      }
                     >
-                      <Text style={styles.actionText}>Return</Text>
+                      <Text style={styles.actionText}>
+                        Return
+                      </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
                       style={styles.deleteButton}
-                      onPress={() => handleDelete(realId, tool.name)}
+                      onPress={() =>
+                        handleDelete(
+                          realId,
+                          tool.name
+                        )
+                      }
                     >
-                      <Text style={styles.actionText}>Delete</Text>
+                      <Text style={styles.actionText}>
+                        Delete
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -257,6 +388,14 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     marginTop: 8,
+  },
+
+  returnAllButton: {
+    backgroundColor: "#16a34a",
+    padding: 16,
+    borderRadius: 14,
+    alignItems: "center",
+    marginTop: 12,
   },
 
   pdfButtonText: {
