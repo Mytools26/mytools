@@ -1,5 +1,6 @@
 import { router } from "expo-router";
 import React, { useState } from "react";
+
 import {
   Alert,
   ScrollView,
@@ -12,250 +13,272 @@ import {
 
 import { useToolStore } from "../../toolStore";
 
-export default function HomeScreen() {
-  const [search, setSearch] = useState("");
+const getToolIcon = (image?: string) => {
+  switch (image) {
+    case "drill":
+      return "🛠️";
+    case "screwdriver":
+      return "🪛";
+    case "battery":
+      return "🔋";
+    case "ladder":
+      return "🪜";
+    case "tester":
+      return "📟";
+    case "cutter":
+      return "✂️";
+    case "grinder":
+      return "⚙️";
+    case "saw":
+      return "🪚";
+    case "light":
+      return "💡";
+    case "safety":
+      return "🦺";
+    case "electrical":
+      return "⚡";
+    default:
+      return "🔧";
+  }
+};
 
+const statuses = ["Available", "In Use", "Missing", "Broken"];
+
+export default function InventoryScreen() {
   const tools = useToolStore((state) => state.tools);
+  const updateTool = useToolStore((state) => state.updateTool);
+  const deleteTool = useToolStore((state) => state.deleteTool);
 
-  const deleteToolFromStore = useToolStore(
-    (state) => state.deleteTool
-  );
+  const [search, setSearch] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [newQuantity, setNewQuantity] = useState("");
 
-  const deleteTool = (id: string) => {
-    Alert.alert("Delete Tool", "Are you sure?", [
-      {
-        text: "Cancel",
-        style: "cancel",
-      },
+  const filteredTools = tools.filter((tool) => {
+    const text = search.toLowerCase();
 
+    return (
+      tool.name?.toLowerCase().includes(text) ||
+      tool.profession?.toLowerCase().includes(text) ||
+      tool.category?.toLowerCase().includes(text) ||
+      tool.location?.toLowerCase().includes(text) ||
+      tool.borrowedBy?.toLowerCase().includes(text) ||
+      tool.holder?.toLowerCase().includes(text) ||
+      tool.status?.toLowerCase().includes(text)
+    );
+  });
+
+  const handleDelete = (toolId?: string, toolName?: string) => {
+    if (!toolId) return;
+
+    Alert.alert("Delete Tool", `Delete ${toolName}?`, [
+      { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
         style: "destructive",
-
-        onPress: () => {
-          deleteToolFromStore(id);
-        },
+        onPress: () => deleteTool(toolId),
       },
     ]);
   };
 
-  const getStatusColor = (
-    status: string | undefined
-  ) => {
-    switch (status) {
-      case "Available":
-        return "#16a34a";
-
-      case "In Use":
-        return "#f97316";
-
-      case "Missing":
-        return "#dc2626";
-
-      case "Broken":
-        return "#6b7280";
-
-      default:
-        return "#16a34a";
-    }
+  const startEdit = (toolId: string, quantity: string) => {
+    setEditingId(toolId);
+    setNewQuantity(quantity || "");
   };
 
-  const fixedTools = tools.map(
-    (tool, index) => ({
+  const saveEdit = (tool: any, toolId: string) => {
+    updateTool(toolId, {
       ...tool,
-
-      id:
-        tool.id ||
-        `old-tool-${index}`,
-
-      status:
-        tool.status ||
-        "Available",
-    })
-  );
-
-  const filteredTools =
-    fixedTools.filter((tool) => {
-      const searchText =
-        search.toLowerCase();
-
-      return (
-        tool.name
-          ?.toLowerCase()
-          .includes(searchText) ||
-
-        tool.profession
-          ?.toLowerCase()
-          .includes(searchText) ||
-
-        tool.category
-          ?.toLowerCase()
-          .includes(searchText) ||
-
-        tool.brand
-          ?.toLowerCase()
-          .includes(searchText) ||
-
-        tool.quantity
-          ?.toLowerCase()
-          .includes(searchText) ||
-
-        tool.status
-          ?.toLowerCase()
-          .includes(searchText) ||
-
-        tool.location
-          ?.toLowerCase()
-          .includes(searchText) ||
-
-        tool.holder
-          ?.toLowerCase()
-          .includes(searchText)
-      );
+      id: toolId,
+      quantity: newQuantity,
     });
+
+    setEditingId(null);
+    setNewQuantity("");
+  };
+
+  const changeStatus = (tool: any, toolId: string, status: string) => {
+    updateTool(toolId, {
+      ...tool,
+      id: toolId,
+      status,
+      holder: status === "Available" ? "" : tool.holder,
+      borrowedBy: status === "Available" ? "" : tool.borrowedBy,
+      location: status === "Available" ? "Warehouse" : tool.location,
+    });
+  };
+
+  const grouped = filteredTools.reduce((acc, tool) => {
+    const profession = tool.profession || "Other";
+    const category = tool.category || "General";
+    const brand = tool.brand || "No Brand";
+
+    if (!acc[profession]) acc[profession] = {};
+    if (!acc[profession][category]) acc[profession][category] = {};
+    if (!acc[profession][category][brand]) {
+      acc[profession][category][brand] = [];
+    }
+
+    acc[profession][category][brand].push(tool);
+
+    return acc;
+  }, {} as Record<string, Record<string, Record<string, typeof tools>>>);
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.logo}>
-        MyTools 🔧
-      </Text>
-
-      <Text style={styles.subtitle}>
-        All your tools organized
-      </Text>
+      <Text style={styles.title}>Inventory</Text>
 
       <TextInput
-        placeholder="Search tools..."
-        placeholderTextColor="#9ca3af"
+        placeholder="Search tool, worker, location, status..."
+        placeholderTextColor="#888"
         style={styles.searchInput}
         value={search}
         onChangeText={setSearch}
       />
 
       <TouchableOpacity
-        style={styles.button}
-        onPress={() =>
-          router.push("/add-tool")
-        }
+        style={styles.addButton}
+        onPress={() => router.push("/add-tool")}
       >
-        <Text style={styles.buttonText}>
-          + Add Tool
-        </Text>
+        <Text style={styles.addButtonText}>+ Add / Assign Tools</Text>
       </TouchableOpacity>
-
-      <Text style={styles.sectionTitle}>
-        My Tools
-      </Text>
 
       {filteredTools.length === 0 ? (
         <Text style={styles.emptyText}>
-          No tools found
+          {tools.length === 0 ? "No tools yet" : "No results found"}
         </Text>
       ) : (
-        filteredTools.map((tool) => (
-          <View
-            key={`${tool.id}-${tool.name}`}
-            style={styles.card}
-          >
-            <View style={styles.cardHeader}>
-              <Text
-                style={styles.toolTitle}
-              >
-                {tool.name}
-              </Text>
+        Object.entries(grouped).map(([profession, categories]) => (
+          <View key={profession} style={styles.card}>
+            <Text style={styles.profession}>{profession}</Text>
 
-              <View
-                style={[
-                  styles.statusBadge,
+            {Object.entries(categories).map(([category, brands]) => (
+              <View key={category} style={styles.section}>
+                <Text style={styles.category}>{category}</Text>
 
-                  {
-                    backgroundColor:
-                      getStatusColor(
-                        tool.status
-                      ),
-                  },
-                ]}
-              >
-                <Text
-                  style={
-                    styles.statusText
-                  }
-                >
-                  {tool.status}
-                </Text>
+                {Object.entries(brands).map(([brand, brandTools]) => (
+                  <View key={brand} style={styles.brandCard}>
+                    {brand !== "No Brand" ? (
+                      <Text style={styles.brand}>{brand}</Text>
+                    ) : null}
+
+                    {brandTools.map((tool, index) => {
+                      const realId = tool.id || `old-tool-${index}`;
+                      const isEditing = editingId === realId;
+
+                      return (
+                        <TouchableOpacity
+                          key={realId}
+                          style={styles.compactToolRow}
+                          activeOpacity={0.85}
+                          onPress={() => {
+                            if (!isEditing) {
+                              startEdit(realId, tool.quantity || "");
+                            }
+                          }}
+                        >
+                          <View style={styles.compactLeft}>
+                            <Text style={styles.compactIcon}>
+                              {getToolIcon(tool.image)}
+                            </Text>
+
+                            <View style={styles.compactTextBox}>
+                              <Text style={styles.compactToolName}>
+                                {tool.name}
+                              </Text>
+
+                              <Text style={styles.compactMeta}>
+                                {(tool.borrowedBy ||
+                                  tool.holder ||
+                                  "Storage") +
+                                  " · " +
+                                  (tool.location || "No location")}
+                              </Text>
+
+                              <Text
+                                style={[
+                                  styles.statusText,
+                                  tool.status === "Missing" &&
+                                    styles.statusMissing,
+                                  tool.status === "Broken" &&
+                                    styles.statusBroken,
+                                  tool.status === "Available" &&
+                                    styles.statusAvailable,
+                                  tool.status === "In Use" &&
+                                    styles.statusInUse,
+                                ]}
+                              >
+                                Status: {tool.status || "Unknown"}
+                              </Text>
+                            </View>
+                          </View>
+
+                          <View style={styles.compactRight}>
+                            {isEditing ? (
+                              <TextInput
+                                style={styles.compactInput}
+                                value={newQuantity}
+                                onChangeText={setNewQuantity}
+                                keyboardType="numeric"
+                              />
+                            ) : (
+                              <Text style={styles.compactQty}>
+                                x{tool.quantity || "0"}
+                              </Text>
+                            )}
+
+                            {isEditing ? (
+                              <View style={styles.editPanel}>
+                                <View style={styles.compactButtons}>
+                                  <TouchableOpacity
+                                    style={styles.saveMiniButton}
+                                    onPress={() => saveEdit(tool, realId)}
+                                  >
+                                    <Text style={styles.miniButtonText}>
+                                      Save
+                                    </Text>
+                                  </TouchableOpacity>
+
+                                  <TouchableOpacity
+                                    style={styles.deleteMiniButton}
+                                    onPress={() =>
+                                      handleDelete(realId, tool.name)
+                                    }
+                                  >
+                                    <Text style={styles.miniButtonText}>
+                                      Delete
+                                    </Text>
+                                  </TouchableOpacity>
+                                </View>
+
+                                <View style={styles.statusRow}>
+                                  {statuses.map((status) => (
+                                    <TouchableOpacity
+                                      key={status}
+                                      style={[
+                                        styles.statusButton,
+                                        tool.status === status &&
+                                          styles.statusButtonActive,
+                                      ]}
+                                      onPress={() =>
+                                        changeStatus(tool, realId, status)
+                                      }
+                                    >
+                                      <Text style={styles.statusButtonText}>
+                                        {status}
+                                      </Text>
+                                    </TouchableOpacity>
+                                  ))}
+                                </View>
+                              </View>
+                            ) : null}
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ))}
               </View>
-            </View>
-
-            <Text style={styles.text}>
-              Profession:{" "}
-              {tool.profession}
-            </Text>
-
-            <Text style={styles.text}>
-              Category:{" "}
-              {tool.category}
-            </Text>
-
-            <Text style={styles.text}>
-              Brand: {tool.brand}
-            </Text>
-
-            {tool.quantity ? (
-              <Text style={styles.text}>
-                Quantity:{" "}
-                {tool.quantity}
-              </Text>
-            ) : null}
-
-            {tool.location ? (
-              <Text style={styles.text}>
-                Location:{" "}
-                {tool.location}
-              </Text>
-            ) : null}
-
-            {tool.holder ? (
-              <Text style={styles.text}>
-                Holder: {tool.holder}
-              </Text>
-            ) : null}
-
-            <TouchableOpacity
-              style={styles.editButton}
-              onPress={() =>
-                router.push({
-                  pathname:
-                    "/edit-tool",
-
-                  params: {
-                    id: tool.id,
-                  },
-                })
-              }
-            >
-              <Text
-                style={
-                  styles.editButtonText
-                }
-              >
-                Edit
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.deleteButton}
-              onPress={() =>
-                deleteTool(tool.id)
-              }
-            >
-              <Text
-                style={
-                  styles.deleteButtonText
-                }
-              >
-                Delete
-              </Text>
-            </TouchableOpacity>
+            ))}
           </View>
         ))
       )}
@@ -270,47 +293,35 @@ const styles = StyleSheet.create({
     padding: 20,
   },
 
-  logo: {
+  title: {
     color: "white",
-    fontSize: 42,
+    fontSize: 44,
     fontWeight: "bold",
-    marginTop: 50,
-  },
-
-  subtitle: {
-    color: "#9ca3af",
-    fontSize: 18,
-    marginBottom: 22,
+    marginTop: 60,
+    marginBottom: 18,
   },
 
   searchInput: {
     backgroundColor: "#111c34",
     color: "white",
     padding: 18,
-    borderRadius: 16,
+    borderRadius: 18,
     fontSize: 18,
-    marginBottom: 18,
+    marginBottom: 16,
   },
 
-  button: {
+  addButton: {
     backgroundColor: "#ff6b00",
-    padding: 20,
+    padding: 18,
     borderRadius: 18,
     alignItems: "center",
-    marginBottom: 30,
+    marginBottom: 24,
   },
 
-  buttonText: {
+  addButtonText: {
     color: "white",
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "bold",
-  },
-
-  sectionTitle: {
-    color: "white",
-    fontSize: 34,
-    fontWeight: "bold",
-    marginBottom: 20,
   },
 
   emptyText: {
@@ -320,73 +331,178 @@ const styles = StyleSheet.create({
 
   card: {
     backgroundColor: "#111c34",
-    borderRadius: 22,
-    padding: 20,
-    marginBottom: 20,
+    borderRadius: 26,
+    padding: 18,
+    marginBottom: 22,
   },
 
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent:
-      "space-between",
+  profession: {
+    color: "#ff6b00",
+    fontSize: 32,
+    fontWeight: "bold",
+    marginBottom: 18,
+  },
 
-    alignItems: "flex-start",
+  section: {
+    marginBottom: 18,
+  },
 
-    gap: 10,
+  category: {
+    color: "#9ca3af",
+    fontSize: 22,
+    fontWeight: "600",
+    marginBottom: 12,
+  },
 
+  brandCard: {
+    backgroundColor: "#1a2747",
+    borderRadius: 18,
+    padding: 12,
+    marginBottom: 14,
+  },
+
+  brand: {
+    color: "white",
+    fontSize: 22,
+    fontWeight: "bold",
     marginBottom: 10,
   },
 
-  toolTitle: {
-    color: "white",
-    fontSize: 28,
-    fontWeight: "bold",
+  compactToolRow: {
+    backgroundColor: "#111c34",
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 9,
+  },
+
+  compactLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  compactIcon: {
+    fontSize: 23,
+    marginRight: 10,
+  },
+
+  compactTextBox: {
     flex: 1,
   },
 
-  statusBadge: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 999,
+  compactToolName: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+
+  compactMeta: {
+    color: "#9ca3af",
+    fontSize: 12,
+    marginTop: 4,
   },
 
   statusText: {
+    fontSize: 12,
+    fontWeight: "bold",
+    marginTop: 4,
+  },
+
+  statusAvailable: {
+    color: "#86efac",
+  },
+
+  statusInUse: {
+    color: "#60a5fa",
+  },
+
+  statusMissing: {
+    color: "#fbbf24",
+  },
+
+  statusBroken: {
+    color: "#f87171",
+  },
+
+  compactRight: {
+    marginTop: 10,
+    alignItems: "flex-end",
+  },
+
+  compactQty: {
+    color: "#ff6b00",
+    fontSize: 20,
+    fontWeight: "bold",
+  },
+
+  compactInput: {
+    backgroundColor: "#020b1f",
+    color: "white",
+    width: 68,
+    padding: 8,
+    borderRadius: 10,
+    textAlign: "center",
+    fontSize: 17,
+    borderWidth: 1,
+    borderColor: "#374151",
+  },
+
+  editPanel: {
+    width: "100%",
+    marginTop: 8,
+  },
+
+  compactButtons: {
+    flexDirection: "row",
+    marginTop: 8,
+    gap: 8,
+  },
+
+  saveMiniButton: {
+    flex: 1,
+    backgroundColor: "#16a34a",
+    paddingVertical: 8,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+
+  deleteMiniButton: {
+    flex: 1,
+    backgroundColor: "#991b1b",
+    paddingVertical: 8,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+
+  miniButtonText: {
     color: "white",
     fontSize: 13,
     fontWeight: "bold",
   },
 
-  text: {
-    color: "#d1d5db",
-    fontSize: 18,
-    marginBottom: 6,
-  },
-
-  editButton: {
-    backgroundColor: "#2563eb",
-    padding: 14,
-    borderRadius: 12,
-    marginTop: 14,
-    alignItems: "center",
-  },
-
-  editButtonText: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-
-  deleteButton: {
-    backgroundColor: "#dc2626",
-    padding: 14,
-    borderRadius: 12,
+  statusRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
     marginTop: 10,
-    alignItems: "center",
   },
 
-  deleteButtonText: {
+  statusButton: {
+    backgroundColor: "#020b1f",
+    borderRadius: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 9,
+    borderWidth: 1,
+    borderColor: "#374151",
+  },
+
+  statusButtonActive: {
+    backgroundColor: "#ff6b00",
+    borderColor: "#ff6b00",
+  },
+
+  statusButtonText: {
     color: "white",
-    fontSize: 18,
+    fontSize: 12,
     fontWeight: "bold",
   },
 });

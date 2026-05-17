@@ -1,6 +1,6 @@
-import { Picker } from "@react-native-picker/picker";
 import { router } from "expo-router";
 import React, { useState } from "react";
+
 import {
   Alert,
   ScrollView,
@@ -8,279 +8,327 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  View,
 } from "react-native";
 
 import { useToolStore } from "../toolStore";
+import toolCatalog from "./toolCatalog";
 
-const professions = [
-  "Electrician",
-  "Plumber",
-  "Carpenter",
-  "Painter",
-  "Mechanic",
-  "Welder",
-  "Mason",
-  "Tiler",
-  "Roofer",
-  "HVAC Technician",
-  "Gardener",
-  "Handyman",
-];
+const professions = Object.keys(toolCatalog || {});
 
-const categories = [
-  "Power Tools",
-  "Hand Tools",
-  "Measuring Tools",
-  "Cutting Tools",
-  "Construction Tools",
-  "Safety Equipment",
-  "Machines",
-  "Ladders",
-];
+type SelectedTools = {
+  [toolName: string]: string;
+};
 
-const brands = [
-  "Makita",
-  "Bosch",
-  "DeWalt",
-  "Milwaukee",
-  "Hilti",
-  "Stanley",
-  "Wera",
-  "Knipex",
-  "Metabo",
-  "Einhell",
-  "Other",
-];
+const getAutoImage = (toolName: string) => {
+  const name = toolName.toLowerCase();
 
-const toolSuggestions = [
-  "Cordless Drill",
-  "Impact Driver",
-  "Hammer Drill",
-  "Rotary Hammer",
-  "Angle Grinder",
-  "Circular Saw",
-  "Jigsaw",
-  "Reciprocating Saw",
-  "Screwdriver Set",
-  "Bit Set",
-  "Hammer",
-  "Tape Measure",
-  "Laser Level",
-  "Spirit Level",
-  "Multimeter",
-  "Voltage Tester",
-  "Wire Stripper",
-  "Crimping Tool",
-  "Pipe Wrench",
-  "Adjustable Wrench",
-  "Pliers Set",
-  "Water Pump Pliers",
-  "Socket Set",
-  "Ratchet Set",
-  "Welding Machine",
-  "Soldering Iron",
-  "Compressor",
-  "Ladder",
-  "Toolbox",
-  "Generator",
-];
+  if (name.includes("drill")) return "drill";
+  if (name.includes("screwdriver")) return "screwdriver";
+  if (name.includes("battery")) return "battery";
+  if (name.includes("ladder")) return "ladder";
+  if (name.includes("meter") || name.includes("tester")) return "tester";
+  if (name.includes("cutter")) return "cutter";
+  if (name.includes("grinder")) return "grinder";
+  if (name.includes("saw")) return "saw";
+  if (name.includes("light")) return "light";
 
-const statuses = [
-  "Available",
-  "In Use",
-  "Missing",
-  "Broken",
-];
+  if (
+    name.includes("terminal") ||
+    name.includes("cable") ||
+    name.includes("junction") ||
+    name.includes("distribution") ||
+    name.includes("breaker") ||
+    name.includes("fuse") ||
+    name.includes("relay") ||
+    name.includes("contactor") ||
+    name.includes("push button") ||
+    name.includes("emergency")
+  ) {
+    return "electrical";
+  }
+
+  if (
+    name.includes("glove") ||
+    name.includes("helmet") ||
+    name.includes("glasses")
+  ) {
+    return "safety";
+  }
+
+  return "tool";
+};
+
+const getToolIcon = (toolName: string) => {
+  const image = getAutoImage(toolName);
+
+  switch (image) {
+    case "drill":
+      return "🛠️";
+    case "screwdriver":
+      return "🪛";
+    case "battery":
+      return "🔋";
+    case "ladder":
+      return "🪜";
+    case "tester":
+      return "📟";
+    case "cutter":
+      return "✂️";
+    case "grinder":
+      return "⚙️";
+    case "saw":
+      return "🪚";
+    case "light":
+      return "💡";
+    case "electrical":
+      return "⚡";
+    case "safety":
+      return "🦺";
+    default:
+      return "🔧";
+  }
+};
 
 export default function AddToolScreen() {
   const addTool = useToolStore((state) => state.addTool);
+  const tools = useToolStore((state) => state.tools || []);
+  const warehouseStock = useToolStore((state) => state.warehouseStock || {});
 
-  const [profession, setProfession] = useState("Electrician");
-  const [category, setCategory] = useState("Power Tools");
-  const [brand, setBrand] = useState("Makita");
-  const [toolName, setToolName] = useState("Cordless Drill");
-  const [customToolName, setCustomToolName] = useState("");
-  const [quantity, setQuantity] = useState("");
-  const [status, setStatus] = useState("Available");
+  const [workerName, setWorkerName] = useState("");
+  const [profession, setProfession] = useState(
+    professions[0] || "Electrician"
+  );
   const [location, setLocation] = useState("");
-  const [holder, setHolder] = useState("");
+  const [selectedTools, setSelectedTools] = useState<SelectedTools>({});
 
-  const saveTool = () => {
-    const finalName =
-      customToolName.trim() || `${brand} ${toolName}`;
+  const currentCatalog =
+    toolCatalog[profession as keyof typeof toolCatalog] || {};
 
-    if (!finalName.trim()) {
-      Alert.alert("Error", "Enter tool name");
+  const selectProfession = (selectedProfession: string) => {
+    setProfession(selectedProfession);
+    setSelectedTools({});
+  };
+
+  const getAssignedQuantity = (toolName: string) => {
+    return tools
+      .filter(
+        (tool) =>
+          tool.name === toolName &&
+          (tool.status === "In Use" || tool.borrowedBy || tool.holder)
+      )
+      .reduce((sum, tool) => sum + Number(tool.quantity || 0), 0);
+  };
+
+  const getAvailableQuantity = (toolName: string) => {
+    const total = Number(warehouseStock[toolName] || 0);
+    const assigned = getAssignedQuantity(toolName);
+    return total - assigned;
+  };
+
+  const updateQuantity = (toolName: string, quantity: string) => {
+    setSelectedTools((current) => {
+      const updated = { ...current };
+
+      if (!quantity || quantity === "0") {
+        delete updated[toolName];
+      } else {
+        updated[toolName] = quantity;
+      }
+
+      return updated;
+    });
+  };
+
+  const findCategory = (toolName: string) => {
+    for (const [sectionName, sectionTools] of Object.entries(currentCatalog)) {
+      const safeTools = Array.isArray(sectionTools) ? sectionTools : [];
+
+      if (safeTools.includes(toolName)) {
+        return sectionName;
+      }
+    }
+
+    return "General";
+  };
+
+  const saveTools = () => {
+    const assignedWorker = workerName.trim();
+
+    const toolsToSave = Object.entries(selectedTools).filter(
+      ([, quantity]) => quantity && quantity !== "0"
+    );
+
+    if (toolsToSave.length === 0) {
+      Alert.alert("Error", "Select at least one tool with quantity");
       return;
     }
 
-    addTool({
-      id: Date.now().toString(),
-      name: finalName,
-      profession,
-      category,
-      brand,
-      quantity,
-      status,
-      location,
-      holder,
+    if (assignedWorker) {
+      for (const [toolName, quantity] of toolsToSave) {
+        const requested = Number(quantity || 0);
+        const available = getAvailableQuantity(toolName);
 
-      borrowedBy: "",
-      returnDate: "",
-      notes: "",
+        if (available <= 0) {
+          Alert.alert(
+            "No stock available",
+            `${toolName} has no available stock.`
+          );
+          return;
+        }
+
+        if (requested > available) {
+          Alert.alert(
+            "Not enough stock",
+            `${toolName}: only ${available} available, but you selected ${requested}.`
+          );
+          return;
+        }
+      }
+    }
+
+    toolsToSave.forEach(([toolName, quantity]) => {
+      addTool({
+        id: `${Date.now()}-${toolName}-${Math.random()}`,
+        name: toolName,
+        profession,
+        category: findCategory(toolName),
+        brand: "",
+        quantity,
+        status: assignedWorker ? "In Use" : "Available",
+        location: location || "Warehouse",
+        holder: assignedWorker,
+        borrowedBy: assignedWorker,
+        returnDate: "",
+        notes: "",
+        image: getAutoImage(toolName),
+      });
     });
 
-    Alert.alert("Success", "Tool added");
+    Alert.alert(
+      "Success",
+      assignedWorker
+        ? `${toolsToSave.length} tools assigned to ${assignedWorker}`
+        : `${toolsToSave.length} tools added to inventory`
+    );
 
-    router.replace("/(tabs)");
+    router.replace(assignedWorker ? "/borrowed" : "/(tabs)");
   };
+
+  const renderOptions = (
+    items: string[],
+    selected: string,
+    setSelected: (value: string) => void
+  ) => (
+    <View style={styles.optionsWrap}>
+      {items.map((item) => (
+        <TouchableOpacity
+          key={item}
+          style={[
+            styles.optionButton,
+            selected === item && styles.optionButtonActive,
+          ]}
+          onPress={() => setSelected(item)}
+        >
+          <Text
+            style={[
+              styles.optionText,
+              selected === item && styles.optionTextActive,
+            ]}
+          >
+            {item}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.title}>
-        Add Tool
-      </Text>
+      <Text style={styles.title}>Add / Assign Tools</Text>
 
+      <Text style={styles.label}>Worker Name</Text>
       <TextInput
-        placeholder="Custom tool name"
+        placeholder="e.g. Ali, Mehmet, Team A"
         placeholderTextColor="#888"
         style={styles.input}
-        value={customToolName}
-        onChangeText={setCustomToolName}
+        value={workerName}
+        onChangeText={setWorkerName}
       />
 
-      <Text style={styles.label}>
-        Profession
-      </Text>
-
-      <Picker
-        selectedValue={profession}
-        onValueChange={setProfession}
-        style={styles.picker}
-      >
-        {professions.map((item) => (
-          <Picker.Item
-            key={item}
-            label={item}
-            value={item}
-          />
-        ))}
-      </Picker>
-
-      <Text style={styles.label}>
-        Category
-      </Text>
-
-      <Picker
-        selectedValue={category}
-        onValueChange={setCategory}
-        style={styles.picker}
-      >
-        {categories.map((item) => (
-          <Picker.Item
-            key={item}
-            label={item}
-            value={item}
-          />
-        ))}
-      </Picker>
-
-      <Text style={styles.label}>
-        Brand
-      </Text>
-
-      <Picker
-        selectedValue={brand}
-        onValueChange={setBrand}
-        style={styles.picker}
-      >
-        {brands.map((item) => (
-          <Picker.Item
-            key={item}
-            label={item}
-            value={item}
-          />
-        ))}
-      </Picker>
-
-      <Text style={styles.label}>
-        Tool
-      </Text>
-
-      <Picker
-        selectedValue={toolName}
-        onValueChange={setToolName}
-        style={styles.picker}
-      >
-        {toolSuggestions.map((item) => (
-          <Picker.Item
-            key={item}
-            label={item}
-            value={item}
-          />
-        ))}
-      </Picker>
-
+      <Text style={styles.label}>Location / Project</Text>
       <TextInput
-        placeholder="Quantity e.g. 5 pieces"
-        placeholderTextColor="#888"
-        style={styles.input}
-        value={quantity}
-        onChangeText={setQuantity}
-      />
-
-      <Text style={styles.label}>
-        Status
-      </Text>
-
-      <Picker
-        selectedValue={status}
-        onValueChange={setStatus}
-        style={styles.picker}
-      >
-        {statuses.map((item) => (
-          <Picker.Item
-            key={item}
-            label={item}
-            value={item}
-          />
-        ))}
-      </Picker>
-
-      <TextInput
-        placeholder="Location e.g. Van"
+        placeholder="e.g. Site A, Van 1, Warehouse"
         placeholderTextColor="#888"
         style={styles.input}
         value={location}
         onChangeText={setLocation}
       />
 
-      <TextInput
-        placeholder="Holder e.g. George"
-        placeholderTextColor="#888"
-        style={styles.input}
-        value={holder}
-        onChangeText={setHolder}
-      />
+      <Text style={styles.label}>Profession</Text>
+      {renderOptions(professions, profession, selectProfession)}
 
-      <TouchableOpacity
-        style={styles.button}
-        onPress={saveTool}
-      >
-        <Text style={styles.buttonText}>
-          Save Tool
-        </Text>
+      <Text style={styles.label}>Tools & Quantity</Text>
+
+      {Object.entries(currentCatalog).map(([sectionName, sectionTools]) => {
+        const safeTools = Array.isArray(sectionTools) ? sectionTools : [];
+
+        return (
+          <View key={sectionName} style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>{sectionName}</Text>
+
+            {safeTools.map((toolName) => {
+              const available = getAvailableQuantity(toolName);
+              const selectedQuantity = Number(selectedTools[toolName] || 0);
+              const isOverStock =
+                !!workerName.trim() && selectedQuantity > available;
+
+              return (
+                <View key={toolName} style={styles.toolRow}>
+                  <View style={styles.toolNameWrap}>
+                    <Text style={styles.toolIcon}>{getToolIcon(toolName)}</Text>
+
+                    <View style={styles.toolTextBox}>
+                      <Text style={styles.toolName}>{toolName}</Text>
+
+                      <Text
+                        style={[
+                          styles.availableText,
+                          available <= 0 && styles.noStockText,
+                        ]}
+                      >
+                        Available: {available}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <TextInput
+                    placeholder="0"
+                    placeholderTextColor="#888"
+                    style={[
+                      styles.quantityInput,
+                      isOverStock && styles.quantityInputError,
+                    ]}
+                    value={selectedTools[toolName] || ""}
+                    onChangeText={(value) => updateQuantity(toolName, value)}
+                    keyboardType="numeric"
+                  />
+                </View>
+              );
+            })}
+          </View>
+        );
+      })}
+
+      <TouchableOpacity style={styles.button} onPress={saveTools}>
+        <Text style={styles.buttonText}>Save Selected Tools</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
         style={styles.backButton}
-        onPress={() =>
-          router.replace("/(tabs)")
-        }
+        onPress={() => router.replace("/(tabs)")}
       >
-        <Text style={styles.backButtonText}>
-          Back
-        </Text>
+        <Text style={styles.backButtonText}>Back</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -295,22 +343,18 @@ const styles = StyleSheet.create({
 
   title: {
     color: "white",
-    fontSize: 36,
+    fontSize: 38,
     fontWeight: "bold",
     marginTop: 60,
-    marginBottom: 30,
+    marginBottom: 28,
   },
 
   label: {
     color: "white",
-    fontSize: 18,
-    marginBottom: 8,
-  },
-
-  picker: {
-    backgroundColor: "#111c34",
-    color: "white",
-    marginBottom: 18,
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 10,
+    marginTop: 10,
   },
 
   input: {
@@ -320,6 +364,110 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     fontSize: 18,
     marginBottom: 18,
+  },
+
+  optionsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 18,
+  },
+
+  optionButton: {
+    backgroundColor: "#111c34",
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: "#1f2937",
+  },
+
+  optionButtonActive: {
+    backgroundColor: "#ff6b00",
+    borderColor: "#ff6b00",
+  },
+
+  optionText: {
+    color: "#d1d5db",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+
+  optionTextActive: {
+    color: "white",
+  },
+
+  sectionCard: {
+    backgroundColor: "#111c34",
+    borderRadius: 22,
+    padding: 16,
+    marginBottom: 18,
+  },
+
+  sectionTitle: {
+    color: "#ff6b00",
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: 12,
+  },
+
+  toolRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomColor: "#1f2937",
+    borderBottomWidth: 1,
+    paddingVertical: 12,
+  },
+
+  toolNameWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    paddingRight: 12,
+  },
+
+  toolIcon: {
+    fontSize: 24,
+    marginRight: 10,
+  },
+
+  toolTextBox: {
+    flex: 1,
+  },
+
+  toolName: {
+    color: "white",
+    fontSize: 17,
+    fontWeight: "bold",
+  },
+
+  availableText: {
+    color: "#86efac",
+    fontSize: 13,
+    fontWeight: "bold",
+    marginTop: 4,
+  },
+
+  noStockText: {
+    color: "#f87171",
+  },
+
+  quantityInput: {
+    backgroundColor: "#020b1f",
+    color: "white",
+    width: 80,
+    padding: 12,
+    borderRadius: 12,
+    fontSize: 18,
+    textAlign: "center",
+    borderWidth: 1,
+    borderColor: "#374151",
+  },
+
+  quantityInputError: {
+    borderColor: "#ef4444",
+    borderWidth: 2,
   },
 
   button: {

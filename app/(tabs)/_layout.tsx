@@ -15,8 +15,8 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: "#020b1f",
           borderTopColor: "#111c34",
-          height: 85,
-          paddingBottom: 18,
+          height: 105,
+          paddingBottom: 35,
           paddingTop: 8,
         },
         tabBarLabelStyle: {
@@ -50,7 +50,11 @@ export default function TabLayout() {
         options={{
           title: "Borrowed",
           tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="person.crop.circle.badge.checkmark" color={color} />
+            <IconSymbol
+              size={28}
+              name="person.crop.circle.badge.checkmark"
+              color={color}
+            />
           ),
         }}
       />
