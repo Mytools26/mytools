@@ -265,37 +265,54 @@ export default function GlobalSearchScreen() {
             <>
               <Text style={styles.sectionTitle}>Tools</Text>
 
-              {toolResults.map((tool, index) => (
-                <View key={tool.id || index} style={styles.card}>
-                  <View style={styles.cardTopRow}>
-                    <View style={styles.cardTextBox}>
-                      <Text style={styles.cardTitle}>{tool.name}</Text>
+              {toolResults.map((tool, index) => {
+                const realId = tool.id || `old-tool-${index}`;
 
-                      <Text style={styles.text}>
-                        {(tool.borrowedBy || tool.holder || "Storage") +
-                          " · " +
-                          (tool.location || "No location")}
-                      </Text>
+                return (
+                  <TouchableOpacity
+                    key={realId}
+                    style={styles.card}
+                    activeOpacity={0.85}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/item-details",
+                        params: { toolId: realId },
+                      } as any)
+                    }
+                  >
+                    <View style={styles.cardTopRow}>
+                      <View style={styles.cardTextBox}>
+                        <Text style={styles.cardTitle}>{tool.name}</Text>
+
+                        <Text style={styles.text}>
+                          {(tool.borrowedBy || tool.holder || "Storage") +
+                            " · " +
+                            (tool.location || "No location")}
+                        </Text>
+                      </View>
+
+                      <View
+                        style={[
+                          styles.statusBadge,
+                          { backgroundColor: getStatusColor(tool.status) },
+                        ]}
+                      >
+                        <Text style={styles.badgeText}>
+                          {tool.status || "Unknown"}
+                        </Text>
+                      </View>
                     </View>
 
-                    <View
-                      style={[
-                        styles.statusBadge,
-                        { backgroundColor: getStatusColor(tool.status) },
-                      ]}
-                    >
-                      <Text style={styles.badgeText}>
-                        {tool.status || "Unknown"}
-                      </Text>
-                    </View>
-                  </View>
+                    <Text style={styles.text}>Qty: {tool.quantity || "0"}</Text>
 
-                  <Text style={styles.text}>Qty: {tool.quantity || "0"}</Text>
-                  <Text style={styles.text}>
-                    {tool.profession || "Other"} · {tool.category || "General"}
-                  </Text>
-                </View>
-              ))}
+                    <Text style={styles.text}>
+                      {tool.profession || "Other"} · {tool.category || "General"}
+                    </Text>
+
+                    <Text style={styles.linkText}>Tap to open tool details</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </>
           ) : null}
 
@@ -313,6 +330,7 @@ export default function GlobalSearchScreen() {
                   <TouchableOpacity
                     key={workerName}
                     style={styles.card}
+                    activeOpacity={0.85}
                     onPress={() =>
                       router.push({
                         pathname: "/worker-details",
@@ -321,9 +339,11 @@ export default function GlobalSearchScreen() {
                     }
                   >
                     <Text style={styles.cardTitle}>{workerName}</Text>
+
                     <Text style={styles.text}>
                       Assigned tools: {workerTools.length}
                     </Text>
+
                     <Text style={styles.linkText}>Open worker details</Text>
                   </TouchableOpacity>
                 );
@@ -336,10 +356,18 @@ export default function GlobalSearchScreen() {
               <Text style={styles.sectionTitle}>Warehouse</Text>
 
               {warehouseResults.map(([toolName, stockQuantity]) => (
-                <View key={toolName} style={styles.card}>
+                <TouchableOpacity
+                  key={toolName}
+                  style={styles.card}
+                  activeOpacity={0.85}
+                  onPress={() => router.push("/warehouse")}
+                >
                   <Text style={styles.cardTitle}>{toolName}</Text>
+
                   <Text style={styles.text}>Stock: {String(stockQuantity)}</Text>
-                </View>
+
+                  <Text style={styles.linkText}>Open warehouse</Text>
+                </TouchableOpacity>
               ))}
             </>
           ) : null}
@@ -349,7 +377,12 @@ export default function GlobalSearchScreen() {
               <Text style={styles.sectionTitle}>History</Text>
 
               {historyResults.slice(0, 20).map((log, index) => (
-                <View key={log.id || index} style={styles.card}>
+                <TouchableOpacity
+                  key={log.id || index}
+                  style={styles.card}
+                  activeOpacity={0.85}
+                  onPress={() => router.push("/history")}
+                >
                   <View style={styles.cardTopRow}>
                     <Text style={styles.cardTitle} numberOfLines={2}>
                       {log.message}
@@ -376,7 +409,9 @@ export default function GlobalSearchScreen() {
                   <Text style={styles.text}>
                     {log.createdAt ? new Date(log.createdAt).toLocaleString() : ""}
                   </Text>
-                </View>
+
+                  <Text style={styles.linkText}>Open history</Text>
+                </TouchableOpacity>
               ))}
             </>
           ) : null}
