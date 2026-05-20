@@ -23,6 +23,9 @@ const guessCategory = (toolName: string) => {
   if (name.includes("drill") || name.includes("grinder") || name.includes("saw")) return "PowerTools";
   if (name.includes("battery") || name.includes("charger")) return "BatteriesChargers";
   if (name.includes("meter") || name.includes("tester") || name.includes("laser")) return "MeasuringTools";
+  if (name.includes("cable") || name.includes("wire") || name.includes("crimp")) return "CableTools";
+  if (name.includes("glove") || name.includes("helmet") || name.includes("glasses")) return "SafetyEquipment";
+  if (name.includes("light")) return "Lighting";
 
   return "CustomTools";
 };
@@ -38,8 +41,45 @@ const getAutoImage = (toolName: string) => {
   if (name.includes("cutter")) return "cutter";
   if (name.includes("grinder")) return "grinder";
   if (name.includes("saw")) return "saw";
+  if (name.includes("light")) return "light";
 
   return "tool";
+};
+
+const getStatusColor = (status?: string) => {
+  switch (status) {
+    case "Available":
+      return "#16a34a";
+    case "In Use":
+      return "#2563eb";
+    case "Missing":
+      return "#f59e0b";
+    case "Broken":
+      return "#7f1d1d";
+    default:
+      return "#374151";
+  }
+};
+
+const getLogColor = (type?: string) => {
+  switch (type) {
+    case "ASSIGN":
+      return "#2563eb";
+    case "RETURN":
+      return "#16a34a";
+    case "DELETE":
+      return "#7f1d1d";
+    case "UPDATE":
+      return "#f59e0b";
+    case "WAREHOUSE":
+      return "#ff6b00";
+    case "CUSTOM_TOOL":
+      return "#7c3aed";
+    case "ADD":
+      return "#0f766e";
+    default:
+      return "#374151";
+  }
 };
 
 export default function GlobalSearchScreen() {
@@ -81,15 +121,29 @@ export default function GlobalSearchScreen() {
     ? historyLogs.filter((log) => {
         return (
           log.message?.toLowerCase().includes(text) ||
-          log.toolName?.toLowerCase().includes(text)
+          log.toolName?.toLowerCase().includes(text) ||
+          log.workerName?.toLowerCase().includes(text) ||
+          log.location?.toLowerCase().includes(text) ||
+          log.type?.toLowerCase().includes(text)
         );
       })
+    : [];
+
+  const workerResults = text
+    ? Array.from(
+        new Set(
+          tools
+            .map((tool) => tool.borrowedBy || tool.holder)
+            .filter(Boolean)
+        )
+      ).filter((worker) => worker.toLowerCase().includes(text))
     : [];
 
   const hasResults =
     toolResults.length > 0 ||
     warehouseResults.length > 0 ||
-    historyResults.length > 0;
+    historyResults.length > 0 ||
+    workerResults.length > 0;
 
   const saveNewTool = () => {
     const toolName = search.trim();
@@ -122,12 +176,14 @@ export default function GlobalSearchScreen() {
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.title}>Global Search</Text>
+      <Text style={styles.title}>Search</Text>
 
-      <Text style={styles.subtitle}>Search tools, workers and warehouse</Text>
+      <Text style={styles.subtitle}>
+        Find tools, workers, warehouse stock and history
+      </Text>
 
       <TextInput
-        placeholder="Search tool..."
+        placeholder="Search tool, worker, location, status..."
         placeholderTextColor="#888"
         style={styles.input}
         value={search}
@@ -135,9 +191,31 @@ export default function GlobalSearchScreen() {
       />
 
       {!search.trim() ? (
-        <Text style={styles.emptyText}>Type something to search</Text>
+        <View style={styles.emptyBox}>
+          <Text style={styles.emptyTitle}>Start typing</Text>
+          <Text style={styles.emptyText}>
+            Search by tool name, worker, project, status or history.
+          </Text>
+        </View>
       ) : (
         <>
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryBox}>
+              <Text style={styles.summaryNumber}>{toolResults.length}</Text>
+              <Text style={styles.summaryLabel}>Tools</Text>
+            </View>
+
+            <View style={styles.summaryBox}>
+              <Text style={styles.summaryNumber}>{workerResults.length}</Text>
+              <Text style={styles.summaryLabel}>Workers</Text>
+            </View>
+
+            <View style={styles.summaryBox}>
+              <Text style={styles.summaryNumber}>{historyResults.length}</Text>
+              <Text style={styles.summaryLabel}>Logs</Text>
+            </View>
+          </View>
+
           {!hasResults ? (
             <View style={styles.quickAddCard}>
               <Text style={styles.sectionTitle}>No results found</Text>
@@ -183,44 +261,133 @@ export default function GlobalSearchScreen() {
             </View>
           ) : null}
 
-          <Text style={styles.sectionTitle}>Tools</Text>
+          {toolResults.length > 0 ? (
+            <>
+              <Text style={styles.sectionTitle}>Tools</Text>
 
-          {toolResults.map((tool, index) => (
-            <View key={tool.id || index} style={styles.card}>
-              <Text style={styles.cardTitle}>{tool.name}</Text>
-              <Text style={styles.text}>Quantity: {tool.quantity || "0"}</Text>
-              <Text style={styles.text}>Status: {tool.status || "Unknown"}</Text>
-              <Text style={styles.text}>
-                Worker: {tool.borrowedBy || tool.holder || "Storage"}
-              </Text>
-            </View>
-          ))}
+              {toolResults.map((tool, index) => (
+                <View key={tool.id || index} style={styles.card}>
+                  <View style={styles.cardTopRow}>
+                    <View style={styles.cardTextBox}>
+                      <Text style={styles.cardTitle}>{tool.name}</Text>
 
-          <Text style={styles.sectionTitle}>Warehouse</Text>
+                      <Text style={styles.text}>
+                        {(tool.borrowedBy || tool.holder || "Storage") +
+                          " · " +
+                          (tool.location || "No location")}
+                      </Text>
+                    </View>
 
-          {warehouseResults.map(([toolName, stockQuantity]) => (
-            <View key={toolName} style={styles.card}>
-              <Text style={styles.cardTitle}>{toolName}</Text>
-              <Text style={styles.text}>Stock: {String(stockQuantity)}</Text>
-            </View>
-          ))}
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        { backgroundColor: getStatusColor(tool.status) },
+                      ]}
+                    >
+                      <Text style={styles.badgeText}>
+                        {tool.status || "Unknown"}
+                      </Text>
+                    </View>
+                  </View>
 
-          <Text style={styles.sectionTitle}>History</Text>
+                  <Text style={styles.text}>Qty: {tool.quantity || "0"}</Text>
+                  <Text style={styles.text}>
+                    {tool.profession || "Other"} · {tool.category || "General"}
+                  </Text>
+                </View>
+              ))}
+            </>
+          ) : null}
 
-          {historyResults.map((log, index) => (
-            <View key={log.id || index} style={styles.card}>
-              <Text style={styles.cardTitle}>{log.message}</Text>
-              <Text style={styles.text}>
-                {log.createdAt ? new Date(log.createdAt).toLocaleString() : ""}
-              </Text>
-            </View>
-          ))}
+          {workerResults.length > 0 ? (
+            <>
+              <Text style={styles.sectionTitle}>Workers</Text>
+
+              {workerResults.map((workerName) => {
+                const workerTools = tools.filter(
+                  (tool) =>
+                    tool.borrowedBy === workerName || tool.holder === workerName
+                );
+
+                return (
+                  <TouchableOpacity
+                    key={workerName}
+                    style={styles.card}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/worker-details",
+                        params: { workerName },
+                      } as any)
+                    }
+                  >
+                    <Text style={styles.cardTitle}>{workerName}</Text>
+                    <Text style={styles.text}>
+                      Assigned tools: {workerTools.length}
+                    </Text>
+                    <Text style={styles.linkText}>Open worker details</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </>
+          ) : null}
+
+          {warehouseResults.length > 0 ? (
+            <>
+              <Text style={styles.sectionTitle}>Warehouse</Text>
+
+              {warehouseResults.map(([toolName, stockQuantity]) => (
+                <View key={toolName} style={styles.card}>
+                  <Text style={styles.cardTitle}>{toolName}</Text>
+                  <Text style={styles.text}>Stock: {String(stockQuantity)}</Text>
+                </View>
+              ))}
+            </>
+          ) : null}
+
+          {historyResults.length > 0 ? (
+            <>
+              <Text style={styles.sectionTitle}>History</Text>
+
+              {historyResults.slice(0, 20).map((log, index) => (
+                <View key={log.id || index} style={styles.card}>
+                  <View style={styles.cardTopRow}>
+                    <Text style={styles.cardTitle} numberOfLines={2}>
+                      {log.message}
+                    </Text>
+
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        { backgroundColor: getLogColor(log.type) },
+                      ]}
+                    >
+                      <Text style={styles.badgeText}>{log.type}</Text>
+                    </View>
+                  </View>
+
+                  <Text style={styles.text}>
+                    Tool: {log.toolName || "Unknown"}
+                  </Text>
+
+                  {log.workerName ? (
+                    <Text style={styles.text}>Worker: {log.workerName}</Text>
+                  ) : null}
+
+                  <Text style={styles.text}>
+                    {log.createdAt ? new Date(log.createdAt).toLocaleString() : ""}
+                  </Text>
+                </View>
+              ))}
+            </>
+          ) : null}
         </>
       )}
 
       <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
         <Text style={styles.backButtonText}>Back</Text>
       </TouchableOpacity>
+
+      <View style={{ height: 60 }} />
     </ScrollView>
   );
 }
@@ -229,65 +396,118 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#020b1f",
-    padding: 20,
+    padding: 16,
   },
 
   title: {
     color: "white",
-    fontSize: 42,
+    fontSize: 40,
     fontWeight: "bold",
-    marginTop: 60,
+    marginTop: 54,
   },
 
   subtitle: {
     color: "#9ca3af",
-    fontSize: 18,
-    marginBottom: 24,
+    fontSize: 16,
+    marginBottom: 18,
   },
 
   input: {
     backgroundColor: "#111c34",
     color: "white",
-    padding: 18,
+    padding: 15,
+    borderRadius: 16,
+    fontSize: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "#1f2937",
+  },
+
+  emptyBox: {
+    backgroundColor: "#111c34",
     borderRadius: 18,
-    fontSize: 18,
-    marginBottom: 18,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#1f2937",
+  },
+
+  emptyTitle: {
+    color: "white",
+    fontSize: 19,
+    fontWeight: "bold",
+    marginBottom: 6,
+  },
+
+  emptyText: {
+    color: "#9ca3af",
+    fontSize: 14,
+  },
+
+  summaryRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 16,
+  },
+
+  summaryBox: {
+    flex: 1,
+    backgroundColor: "#111c34",
+    borderRadius: 15,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#1f2937",
+  },
+
+  summaryNumber: {
+    color: "#ff6b00",
+    fontSize: 24,
+    fontWeight: "bold",
+  },
+
+  summaryLabel: {
+    color: "#9ca3af",
+    fontSize: 12,
+    marginTop: 3,
   },
 
   sectionTitle: {
     color: "#ff6b00",
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "bold",
-    marginBottom: 12,
-    marginTop: 10,
+    marginBottom: 10,
+    marginTop: 8,
   },
 
   quickAddCard: {
     backgroundColor: "#111c34",
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 20,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#1f2937",
   },
 
   label: {
     color: "white",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "bold",
     marginBottom: 10,
+    marginTop: 10,
   },
 
   professionWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
-    marginBottom: 16,
+    gap: 8,
+    marginBottom: 14,
   },
 
   professionButton: {
     backgroundColor: "#020b1f",
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+    borderRadius: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: "#374151",
   },
@@ -299,7 +519,7 @@ const styles = StyleSheet.create({
 
   professionText: {
     color: "#d1d5db",
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "bold",
   },
 
@@ -309,56 +529,83 @@ const styles = StyleSheet.create({
 
   addButton: {
     backgroundColor: "#ff6b00",
-    padding: 16,
-    borderRadius: 14,
+    padding: 14,
+    borderRadius: 13,
     alignItems: "center",
   },
 
   addButtonText: {
     color: "white",
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: "bold",
   },
 
   card: {
     backgroundColor: "#111c34",
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#1f2937",
+  },
+
+  cardTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 8,
+    alignItems: "flex-start",
+    marginBottom: 6,
+  },
+
+  cardTextBox: {
+    flex: 1,
   },
 
   cardTitle: {
     color: "white",
-    fontSize: 19,
+    fontSize: 17,
     fontWeight: "bold",
-    marginBottom: 8,
+    marginBottom: 6,
+    flex: 1,
   },
 
   text: {
     color: "#d1d5db",
-    fontSize: 15,
-    marginBottom: 4,
+    fontSize: 13,
+    marginBottom: 3,
   },
 
-  emptyText: {
-    color: "#9ca3af",
-    fontSize: 16,
-    marginBottom: 14,
+  linkText: {
+    color: "#60a5fa",
+    fontSize: 13,
+    fontWeight: "bold",
+    marginTop: 6,
+  },
+
+  statusBadge: {
+    borderRadius: 999,
+    paddingVertical: 5,
+    paddingHorizontal: 9,
+  },
+
+  badgeText: {
+    color: "white",
+    fontSize: 11,
+    fontWeight: "bold",
   },
 
   backButton: {
     borderColor: "#374151",
     borderWidth: 1,
-    padding: 18,
-    borderRadius: 16,
+    padding: 15,
+    borderRadius: 14,
     alignItems: "center",
-    marginTop: 18,
-    marginBottom: 60,
+    marginTop: 16,
   },
 
   backButtonText: {
     color: "white",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "bold",
   },
 });
