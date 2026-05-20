@@ -1,99 +1,262 @@
 import { router } from "expo-router";
 import React from "react";
+
 import {
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+
 import { useToolStore } from "../toolStore";
 
+const getTypeColor = (type: string) => {
+  switch (type) {
+    case "ASSIGN":
+      return "#2563eb";
+    case "RETURN":
+      return "#16a34a";
+    case "DELETE":
+      return "#7f1d1d";
+    case "UPDATE":
+      return "#f59e0b";
+    case "WAREHOUSE":
+      return "#ff6b00";
+    case "CUSTOM_TOOL":
+      return "#7c3aed";
+    case "ADD":
+      return "#0f766e";
+    default:
+      return "#374151";
+  }
+};
+
 export default function History() {
-  const historyLogs = useToolStore((state) => state.historyLogs);
+  const historyLogs = useToolStore((state) => state.historyLogs || []);
   const deleteLog = useToolStore((state) => state.deleteHistoryLog);
   const clearLogs = useToolStore((state) => state.clearHistoryLogs);
 
   const formatDate = (date: string) => {
+    if (!date) return "";
     return new Date(date).toLocaleString();
+  };
+
+  const handleDelete = (id: string) => {
+    Alert.alert("Delete Log", "Delete this history entry?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => deleteLog(id),
+      },
+    ]);
+  };
+
+  const handleClearAll = () => {
+    if (historyLogs.length === 0) return;
+
+    Alert.alert("Clear History", "Delete all history entries?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Clear All",
+        style: "destructive",
+        onPress: clearLogs,
+      },
+    ]);
   };
 
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.title}>History</Text>
-      <Text style={styles.subtitle}>Tool movements and warehouse activity</Text>
+
+      <Text style={styles.subtitle}>
+        Tool movements and warehouse activity
+      </Text>
+
+      {historyLogs.length > 0 ? (
+        <TouchableOpacity style={styles.clearButton} onPress={handleClearAll}>
+          <Text style={styles.clearButtonText}>Clear All History</Text>
+        </TouchableOpacity>
+      ) : null}
 
       {historyLogs.length === 0 ? (
         <Text style={styles.emptyText}>No history yet</Text>
       ) : (
-        <>
-          <TouchableOpacity
-            style={styles.clearButton}
-            onPress={clearLogs}
-          >
-            <Text style={styles.clearButtonText}>Clear All</Text>
-          </TouchableOpacity>
-
-          {historyLogs.map((log) => (
-            <View key={log.id} style={styles.card}>
-              <Text style={styles.type}>{log.type}</Text>
-              <Text style={styles.message}>{log.message}</Text>
-              {log.workerName && <Text style={styles.meta}>Worker: {log.workerName}</Text>}
-              {log.location && <Text style={styles.meta}>Location: {log.location}</Text>}
-              <Text style={styles.date}>{formatDate(log.createdAt)}</Text>
+        historyLogs.map((log) => (
+          <View key={log.id} style={styles.card}>
+            <View style={styles.topRow}>
+              <View
+                style={[
+                  styles.typeBadge,
+                  { backgroundColor: getTypeColor(log.type) },
+                ]}
+              >
+                <Text style={styles.typeText}>{log.type}</Text>
+              </View>
 
               <TouchableOpacity
-                style={styles.deleteButton}
-                onPress={() => deleteLog(log.id)}
+                style={styles.deleteSmallButton}
+                onPress={() => handleDelete(log.id)}
               >
-                <Text style={styles.deleteButtonText}>Delete</Text>
+                <Text style={styles.deleteSmallButtonText}>Delete</Text>
               </TouchableOpacity>
             </View>
-          ))}
-        </>
+
+            <Text style={styles.message}>{log.message}</Text>
+
+            <View style={styles.metaBox}>
+              <Text style={styles.meta}>Tool: {log.toolName || "Unknown"}</Text>
+
+              {log.quantity ? (
+                <Text style={styles.meta}>Quantity: {log.quantity}</Text>
+              ) : null}
+
+              {log.workerName ? (
+                <Text style={styles.meta}>Worker: {log.workerName}</Text>
+              ) : null}
+
+              {log.location ? (
+                <Text style={styles.meta}>Location: {log.location}</Text>
+              ) : null}
+
+              <Text style={styles.date}>{formatDate(log.createdAt)}</Text>
+            </View>
+          </View>
+        ))
       )}
 
       <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
         <Text style={styles.backButtonText}>Back</Text>
       </TouchableOpacity>
+
+      <View style={{ height: 60 }} />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#020b1f", padding: 20 },
-  title: { color: "white", fontSize: 42, fontWeight: "bold", marginTop: 60 },
-  subtitle: { color: "#9ca3af", fontSize: 18, marginBottom: 24 },
-  emptyText: { color: "#9ca3af", fontSize: 18 },
-  card: { backgroundColor: "#111c34", borderRadius: 20, padding: 18, marginBottom: 14 },
-  type: { color: "#ff6b00", fontSize: 16, fontWeight: "bold", marginBottom: 8 },
-  message: { color: "white", fontSize: 18, fontWeight: "bold", marginBottom: 8 },
-  meta: { color: "#d1d5db", fontSize: 15, marginBottom: 4 },
-  date: { color: "#9ca3af", fontSize: 13, marginTop: 8 },
+  container: {
+    flex: 1,
+    backgroundColor: "#020b1f",
+    padding: 16,
+  },
+
+  title: {
+    color: "white",
+    fontSize: 40,
+    fontWeight: "bold",
+    marginTop: 54,
+  },
+
+  subtitle: {
+    color: "#9ca3af",
+    fontSize: 16,
+    marginBottom: 18,
+  },
+
+  clearButton: {
+    backgroundColor: "#7f1d1d",
+    borderRadius: 14,
+    padding: 14,
+    alignItems: "center",
+    marginBottom: 14,
+  },
+
+  clearButtonText: {
+    color: "white",
+    fontSize: 15,
+    fontWeight: "bold",
+  },
+
+  emptyText: {
+    color: "#9ca3af",
+    fontSize: 16,
+  },
+
+  card: {
+    backgroundColor: "#111c34",
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#1f2937",
+  },
+
+  topRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+
+  typeBadge: {
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+
+  typeText: {
+    color: "white",
+    fontSize: 12,
+    fontWeight: "bold",
+  },
+
+  deleteSmallButton: {
+    backgroundColor: "#020b1f",
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "#7f1d1d",
+  },
+
+  deleteSmallButtonText: {
+    color: "#fca5a5",
+    fontSize: 12,
+    fontWeight: "bold",
+  },
+
+  message: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "bold",
+    marginBottom: 10,
+  },
+
+  metaBox: {
+    backgroundColor: "#020b1f",
+    borderRadius: 14,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "#1f2937",
+  },
+
+  meta: {
+    color: "#d1d5db",
+    fontSize: 13,
+    marginBottom: 4,
+  },
+
+  date: {
+    color: "#9ca3af",
+    fontSize: 12,
+    marginTop: 4,
+  },
+
   backButton: {
     borderColor: "#374151",
     borderWidth: 1,
-    padding: 18,
-    borderRadius: 16,
+    padding: 15,
+    borderRadius: 14,
     alignItems: "center",
     marginTop: 14,
-    marginBottom: 60,
   },
-  backButtonText: { color: "white", fontSize: 18, fontWeight: "bold" },
-  deleteButton: {
-    backgroundColor: "#ff3b3b",
-    borderRadius: 12,
-    padding: 8,
-    marginTop: 8,
-    alignSelf: "flex-start",
+
+  backButtonText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "bold",
   },
-  deleteButtonText: { color: "white", fontWeight: "bold" },
-  clearButton: {
-    backgroundColor: "#ff6b00",
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 14,
-    alignItems: "center",
-  },
-  clearButtonText: { color: "white", fontWeight: "bold", fontSize: 16 },
 });
