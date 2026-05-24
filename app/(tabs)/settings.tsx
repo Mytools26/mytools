@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as DocumentPicker from "expo-document-picker";
 import React, { useEffect, useState } from "react";
 
 import {
@@ -51,7 +52,8 @@ export default function SettingsScreen() {
     const settingsData = await AsyncStorage.getItem(SETTINGS_KEY);
 
     const backup = {
-      appName: "MyTools",
+      app: "MyTools",
+      version: "1.0",
       exportedAt: new Date().toISOString(),
       settings: settingsData ? JSON.parse(settingsData) : null,
       storage: appData ? JSON.parse(appData) : null,
@@ -61,6 +63,43 @@ export default function SettingsScreen() {
       title: "MyTools Backup",
       message: JSON.stringify(backup, null, 2),
     });
+  };
+
+  const importBackup = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "application/json",
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      const file = result.assets[0];
+
+      const response = await fetch(file.uri);
+      const text = await response.text();
+      const parsed = JSON.parse(text);
+
+      if (parsed.settings) {
+        await AsyncStorage.setItem(
+          SETTINGS_KEY,
+          JSON.stringify(parsed.settings)
+        );
+      }
+
+      if (parsed.storage) {
+        await AsyncStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify(parsed.storage)
+        );
+      }
+
+      Alert.alert("Import Complete", "Backup restored. Restart Expo.");
+    } catch (error) {
+      Alert.alert("Import Failed", "Invalid backup file.");
+    }
   };
 
   const resetApp = async () => {
@@ -106,7 +145,9 @@ export default function SettingsScreen() {
         <View style={styles.switchRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.label}>Dark Mode</Text>
-            <Text style={styles.hint}>Saved for later full theme system</Text>
+            <Text style={styles.hint}>
+              Saved for the future theme system
+            </Text>
           </View>
 
           <Switch value={darkMode} onValueChange={setDarkMode} />
@@ -117,11 +158,15 @@ export default function SettingsScreen() {
         <Text style={styles.label}>Backup</Text>
 
         <Text style={styles.hint}>
-          Export all local app data as a backup text file/share message.
+          Export or import tools, workers, warehouse stock and history.
         </Text>
 
         <TouchableOpacity style={styles.exportButton} onPress={exportBackup}>
           <Text style={styles.buttonText}>Export Backup</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.importButton} onPress={importBackup}>
+          <Text style={styles.buttonText}>Import Backup</Text>
         </TouchableOpacity>
       </View>
 
@@ -181,6 +226,7 @@ const styles = StyleSheet.create({
   hint: {
     color: "#9ca3af",
     fontSize: 13,
+    lineHeight: 18,
     marginBottom: 12,
   },
 
@@ -214,6 +260,14 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     alignItems: "center",
     marginTop: 4,
+  },
+
+  importButton: {
+    backgroundColor: "#16a34a",
+    padding: 14,
+    borderRadius: 13,
+    alignItems: "center",
+    marginTop: 10,
   },
 
   dangerCard: {
