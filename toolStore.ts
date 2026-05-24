@@ -53,39 +53,33 @@ interface ToolState {
 
   addTool: (tool: Tool) => void;
 
-  updateTool: (
-    id: string,
-    updatedTool: Tool
-  ) => void;
+  updateTool: (id: string, updatedTool: Tool) => void;
 
   deleteTool: (id: string) => void;
 
   assignTool: (
     id: string,
-    workerName: string
+    workerName: string,
+    quantity?: string | number
   ) => void;
 
-  returnTool: (id: string) => void;
+  returnTool: (
+    id: string,
+    quantity?: string | number
+  ) => void;
 
   setWarehouseQuantity: (
     toolName: string,
     quantity: string
   ) => void;
 
-  addCustomTool: (
-    tool: CustomTool
-  ) => void;
+  addCustomTool: (tool: CustomTool) => void;
 
   addHistoryLog: (
-    log: Omit<
-      HistoryLog,
-      "id" | "createdAt"
-    >
+    log: Omit<HistoryLog, "id" | "createdAt">
   ) => void;
 
-  deleteHistoryLog: (
-    id: string
-  ) => void;
+  deleteHistoryLog: (id: string) => void;
 
   clearHistoryLogs: () => void;
 
@@ -97,523 +91,440 @@ interface ToolState {
 }
 
 const createLog = (
-  log: Omit<
-    HistoryLog,
-    "id" | "createdAt"
-  >
+  log: Omit<HistoryLog, "id" | "createdAt">
 ): HistoryLog => ({
   ...log,
   id: `${Date.now()}-${Math.random()}`,
   createdAt: new Date().toISOString(),
 });
 
-export const useToolStore =
-  create<ToolState>()(
-    persist(
-      (set) => ({
-        tools: [],
+const getRealId = (tool: Tool, index: number) => {
+  return tool.id || `old-tool-${index}`;
+};
 
-        warehouseStock: {},
+const toNumber = (value?: string | number) => {
+  const number = Number(value || 0);
+  return Number.isNaN(number) ? 0 : number;
+};
 
-        customTools: [],
+const createToolId = (name: string) => {
+  return `${Date.now()}-${Math.random()}-${name}`;
+};
 
-        historyLogs: [],
+export const useToolStore = create<ToolState>()(
+  persist(
+    (set) => ({
+      tools: [],
+      warehouseStock: {},
+      customTools: [],
+      historyLogs: [],
 
-        addTool: (tool) =>
-          set((state) => ({
-            tools: [
-              ...state.tools,
-              tool,
-            ],
+      addTool: (tool) =>
+        set((state) => {
+          const safeTool: Tool = {
+            ...tool,
+            id: tool.id || createToolId(tool.name),
+          };
+
+          return {
+            tools: [...state.tools, safeTool],
 
             historyLogs: [
               createLog({
                 type:
-                  tool.borrowedBy ||
-                  tool.holder
+                  safeTool.borrowedBy || safeTool.holder
                     ? "ASSIGN"
                     : "ADD",
 
-                toolName: tool.name,
-
-                quantity:
-                  tool.quantity,
-
+                toolName: safeTool.name,
+                quantity: safeTool.quantity,
                 workerName:
-                  tool.borrowedBy ||
-                  tool.holder,
-
-                location:
-                  tool.location,
+                  safeTool.borrowedBy || safeTool.holder,
+                location: safeTool.location,
 
                 message:
-                  tool.borrowedBy ||
-                  tool.holder
-                    ? `${tool.name} x${tool.quantity} assigned to ${
-                        tool.borrowedBy ||
-                        tool.holder
+                  safeTool.borrowedBy || safeTool.holder
+                    ? `${safeTool.name} x${safeTool.quantity} assigned to ${
+                        safeTool.borrowedBy || safeTool.holder
                       }`
-                    : `${tool.name} x${tool.quantity} added to inventory`,
+                    : `${safeTool.name} x${safeTool.quantity} added to inventory`,
               }),
 
               ...state.historyLogs,
             ],
-          })),
+          };
+        }),
 
-        updateTool: (
-          id,
-          updatedTool
-        ) =>
-          set((state) => ({
-            tools:
-              state.tools.map(
-                (
-                  tool,
-                  index
-                ) => {
-                  const realId =
-                    tool.id ||
-                    `old-tool-${index}`;
+      updateTool: (id, updatedTool) =>
+        set((state) => ({
+          tools: state.tools.map((tool, index) => {
+            const realId = getRealId(tool, index);
 
-                  return realId ===
-                    id
-                    ? {
-                        ...updatedTool,
-                        id: realId,
-                      }
-                    : tool;
+            return realId === id
+              ? {
+                  ...updatedTool,
+                  id: realId,
                 }
-              ),
+              : tool;
+          }),
+
+          historyLogs: [
+            createLog({
+              type: "UPDATE",
+              toolName: updatedTool.name,
+              quantity: updatedTool.quantity,
+              workerName:
+                updatedTool.borrowedBy || updatedTool.holder,
+              location: updatedTool.location,
+              message: `${updatedTool.name} updated`,
+            }),
+
+            ...state.historyLogs,
+          ],
+        })),
+
+      deleteTool: (id) =>
+        set((state) => {
+          const toolToDelete = state.tools.find((tool, index) => {
+            const realId = getRealId(tool, index);
+            return realId === id;
+          });
+
+          return {
+            tools: state.tools.filter((tool, index) => {
+              const realId = getRealId(tool, index);
+              return realId !== id;
+            }),
+
+            historyLogs: toolToDelete
+              ? [
+                  createLog({
+                    type: "DELETE",
+                    toolName: toolToDelete.name,
+                    quantity: toolToDelete.quantity,
+                    workerName:
+                      toolToDelete.borrowedBy ||
+                      toolToDelete.holder,
+                    location: toolToDelete.location,
+                    message: `${toolToDelete.name} deleted`,
+                  }),
+
+                  ...state.historyLogs,
+                ]
+              : state.historyLogs,
+          };
+        }),
+
+      assignTool: (id, workerName, quantity) =>
+        set((state) => {
+          const targetIndex = state.tools.findIndex((tool, index) => {
+            const realId = getRealId(tool, index);
+            return realId === id;
+          });
+
+          if (targetIndex === -1) {
+            return state;
+          }
+
+          const targetTool = state.tools[targetIndex];
+          const realId = getRealId(targetTool, targetIndex);
+
+          const currentQuantity = Math.max(
+            toNumber(targetTool.quantity),
+            1
+          );
+
+          const requestedQuantity =
+            quantity === undefined
+              ? currentQuantity
+              : Math.max(toNumber(quantity), 1);
+
+          const assignedQuantity = Math.min(
+            requestedQuantity,
+            currentQuantity
+          );
+
+          const remainingQuantity =
+            currentQuantity - assignedQuantity;
+
+          const assignedTool: Tool = {
+            ...targetTool,
+            id:
+              remainingQuantity > 0
+                ? createToolId(targetTool.name)
+                : realId,
+            quantity: String(assignedQuantity),
+            holder: workerName,
+            borrowedBy: workerName,
+            status: "In Use",
+          };
+
+          let updatedTools: Tool[] = [];
+
+          if (remainingQuantity > 0) {
+            updatedTools = state.tools.map((tool, index) => {
+              const itemId = getRealId(tool, index);
+
+              if (itemId === realId) {
+                return {
+                  ...tool,
+                  id: realId,
+                  quantity: String(remainingQuantity),
+                  holder: "",
+                  borrowedBy: "",
+                  status: "Available",
+                };
+              }
+
+              return tool;
+            });
+
+            updatedTools.push(assignedTool);
+          } else {
+            updatedTools = state.tools.map((tool, index) => {
+              const itemId = getRealId(tool, index);
+
+              if (itemId === realId) {
+                return assignedTool;
+              }
+
+              return tool;
+            });
+          }
+
+          return {
+            tools: updatedTools,
 
             historyLogs: [
               createLog({
-                type: "UPDATE",
-
-                toolName:
-                  updatedTool.name,
-
-                quantity:
-                  updatedTool.quantity,
-
-                workerName:
-                  updatedTool.borrowedBy ||
-                  updatedTool.holder,
-
-                location:
-                  updatedTool.location,
-
-                message: `${updatedTool.name} updated`,
+                type: "ASSIGN",
+                toolName: targetTool.name,
+                quantity: String(assignedQuantity),
+                workerName,
+                location: targetTool.location,
+                message: `${targetTool.name} x${assignedQuantity} assigned to ${workerName}`,
               }),
 
               ...state.historyLogs,
             ],
-          })),
+          };
+        }),
 
-        deleteTool: (id) =>
-          set((state) => {
-            const toolToDelete =
-              state.tools.find(
-                (
-                  tool,
-                  index
-                ) => {
-                  const realId =
-                    tool.id ||
-                    `old-tool-${index}`;
+      returnTool: (id, quantity) =>
+        set((state) => {
+          const targetIndex = state.tools.findIndex((tool, index) => {
+            const realId = getRealId(tool, index);
+            return realId === id;
+          });
 
-                  return (
-                    realId === id
-                  );
-                }
-              );
+          if (targetIndex === -1) {
+            return state;
+          }
 
-            return {
-              tools:
-                state.tools.filter(
-                  (
-                    tool,
-                    index
-                  ) => {
-                    const realId =
-                      tool.id ||
-                      `old-tool-${index}`;
+          const targetTool = state.tools[targetIndex];
+          const realId = getRealId(targetTool, targetIndex);
 
-                    return (
-                      realId !==
-                      id
-                    );
-                  }
-                ),
+          const currentQuantity = Math.max(
+            toNumber(targetTool.quantity),
+            1
+          );
 
-              historyLogs:
-                toolToDelete
-                  ? [
-                      createLog({
-                        type:
-                          "DELETE",
+          const requestedQuantity =
+            quantity === undefined
+              ? currentQuantity
+              : Math.max(toNumber(quantity), 1);
 
-                        toolName:
-                          toolToDelete.name,
+          const returnedQuantity = Math.min(
+            requestedQuantity,
+            currentQuantity
+          );
 
-                        quantity:
-                          toolToDelete.quantity,
+          const remainingBorrowedQuantity =
+            currentQuantity - returnedQuantity;
 
-                        workerName:
-                          toolToDelete.borrowedBy ||
-                          toolToDelete.holder,
+          const previousWorker =
+            targetTool.borrowedBy || targetTool.holder || "";
 
-                        location:
-                          toolToDelete.location,
+          let updatedTools: Tool[] = [];
 
-                        message: `${toolToDelete.name} deleted`,
-                      }),
+          if (remainingBorrowedQuantity > 0) {
+            updatedTools = state.tools.map((tool, index) => {
+              const itemId = getRealId(tool, index);
 
-                      ...state.historyLogs,
-                    ]
-                  : state.historyLogs,
-            };
-          }),
+              if (itemId === realId) {
+                return {
+                  ...tool,
+                  id: realId,
+                  quantity: String(remainingBorrowedQuantity),
+                  status: "In Use",
+                  borrowedBy: previousWorker,
+                  holder: previousWorker,
+                };
+              }
 
-        assignTool: (
-          id,
-          workerName
-        ) =>
-          set((state) => {
-            let assignedTool:
-              | Tool
-              | undefined;
+              return tool;
+            });
 
-            const updatedTools =
-              state.tools.map(
-                (
-                  tool,
-                  index
-                ) => {
-                  const realId =
-                    tool.id ||
-                    `old-tool-${index}`;
+            updatedTools.push({
+              ...targetTool,
+              id: createToolId(targetTool.name),
+              quantity: String(returnedQuantity),
+              holder: "",
+              borrowedBy: "",
+              status: "Available",
+              location: "Warehouse",
+              returnDate: new Date().toISOString(),
+            });
+          } else {
+            updatedTools = state.tools.map((tool, index) => {
+              const itemId = getRealId(tool, index);
 
-                  if (
-                    realId === id
-                  ) {
-                    assignedTool =
-                      {
-                        ...tool,
-                        holder:
-                          workerName,
-                        borrowedBy:
-                          workerName,
-                        status:
-                          "In Use",
-                      };
+              if (itemId === realId) {
+                return {
+                  ...tool,
+                  id: realId,
+                  holder: "",
+                  borrowedBy: "",
+                  status: "Available",
+                  location: "Warehouse",
+                  returnDate: new Date().toISOString(),
+                };
+              }
 
-                    return assignedTool;
-                  }
+              return tool;
+            });
+          }
 
-                  return tool;
-                }
-              );
-
-            return {
-              tools:
-                updatedTools,
-
-              historyLogs:
-                assignedTool
-                  ? [
-                      createLog({
-                        type:
-                          "ASSIGN",
-
-                        toolName:
-                          assignedTool.name,
-
-                        quantity:
-                          assignedTool.quantity,
-
-                        workerName,
-
-                        location:
-                          assignedTool.location,
-
-                        message: `${assignedTool.name} x${assignedTool.quantity} assigned to ${workerName}`,
-                      }),
-
-                      ...state.historyLogs,
-                    ]
-                  : state.historyLogs,
-            };
-          }),
-
-        returnTool: (id) =>
-          set((state) => {
-            let returnedTool:
-              | Tool
-              | undefined;
-
-            let previousWorker =
-              "";
-
-            const updatedTools =
-              state.tools.map(
-                (
-                  tool,
-                  index
-                ) => {
-                  const realId =
-                    tool.id ||
-                    `old-tool-${index}`;
-
-                  if (
-                    realId === id
-                  ) {
-                    previousWorker =
-                      tool.borrowedBy ||
-                      tool.holder ||
-                      "";
-
-                    returnedTool =
-                      {
-                        ...tool,
-                        id: realId,
-                        holder: "",
-                        borrowedBy:
-                          "",
-                        status:
-                          "Available",
-                        location:
-                          "Warehouse",
-                        returnDate:
-                          new Date().toISOString(),
-                      };
-
-                    return returnedTool;
-                  }
-
-                  return tool;
-                }
-              );
-
-            return {
-              tools:
-                updatedTools,
-
-              historyLogs:
-                returnedTool
-                  ? [
-                      createLog({
-                        type:
-                          "RETURN",
-
-                        toolName:
-                          returnedTool.name,
-
-                        quantity:
-                          returnedTool.quantity,
-
-                        workerName:
-                          previousWorker,
-
-                        location:
-                          "Warehouse",
-
-                        message: `${returnedTool.name} x${returnedTool.quantity} returned from ${
-                          previousWorker ||
-                          "worker"
-                        }`,
-                      }),
-
-                      ...state.historyLogs,
-                    ]
-                  : state.historyLogs,
-            };
-          }),
-
-        setWarehouseQuantity: (
-          toolName,
-          quantity
-        ) =>
-          set((state) => ({
-            warehouseStock: {
-              ...state.warehouseStock,
-              [toolName]:
-                quantity,
-            },
+          return {
+            tools: updatedTools,
 
             historyLogs: [
               createLog({
-                type:
-                  "WAREHOUSE",
-
-                toolName,
-
-                quantity,
-
-                message: `${toolName} warehouse stock set to ${
-                  quantity || "0"
+                type: "RETURN",
+                toolName: targetTool.name,
+                quantity: String(returnedQuantity),
+                workerName: previousWorker,
+                location: "Warehouse",
+                message: `${targetTool.name} x${returnedQuantity} returned from ${
+                  previousWorker || "worker"
                 }`,
               }),
 
               ...state.historyLogs,
             ],
-          })),
+          };
+        }),
 
-        addCustomTool: (
-          tool
-        ) =>
-          set((state) => {
-            const alreadyExists =
-              state.customTools.some(
-                (
-                  item
-                ) =>
-                  item.name.toLowerCase() ===
-                    tool.name.toLowerCase() &&
-                  item.profession ===
-                    tool.profession
-              );
+      setWarehouseQuantity: (toolName, quantity) =>
+        set((state) => ({
+          warehouseStock: {
+            ...state.warehouseStock,
+            [toolName]: quantity,
+          },
 
-            if (
-              alreadyExists
-            ) {
-              return state;
-            }
+          historyLogs: [
+            createLog({
+              type: "WAREHOUSE",
+              toolName,
+              quantity,
+              message: `${toolName} warehouse stock set to ${
+                quantity || "0"
+              }`,
+            }),
 
-            return {
-              customTools: [
-                ...state.customTools,
-                tool,
-              ],
+            ...state.historyLogs,
+          ],
+        })),
 
-              historyLogs: [
-                createLog({
-                  type:
-                    "CUSTOM_TOOL",
+      addCustomTool: (tool) =>
+        set((state) => {
+          const alreadyExists = state.customTools.some(
+            (item) =>
+              item.name.toLowerCase() === tool.name.toLowerCase() &&
+              item.profession === tool.profession
+          );
 
-                  toolName:
-                    tool.name,
+          if (alreadyExists) {
+            return state;
+          }
 
-                  message: `${tool.name} added as custom tool`,
-                }),
+          return {
+            customTools: [...state.customTools, tool],
 
-                ...state.historyLogs,
-              ],
-            };
-          }),
-
-        addHistoryLog: (
-          log
-        ) =>
-          set((state) => ({
             historyLogs: [
-              createLog(log),
+              createLog({
+                type: "CUSTOM_TOOL",
+                toolName: tool.name,
+                message: `${tool.name} added as custom tool`,
+              }),
 
               ...state.historyLogs,
             ],
-          })),
+          };
+        }),
 
-        deleteHistoryLog: (
-          id
-        ) =>
-          set((state) => ({
-            historyLogs:
-              state.historyLogs.filter(
-                (log) =>
-                  log.id !== id
-              ),
-          })),
+      addHistoryLog: (log) =>
+        set((state) => ({
+          historyLogs: [
+            createLog(log),
+            ...state.historyLogs,
+          ],
+        })),
 
-        clearHistoryLogs:
-          () =>
-            set(() => ({
-              historyLogs:
-                [],
-            })),
-
-        duplicateWorkerGroup: (
-          oldWorkerName,
-          newWorkerName,
-          newLocation
-        ) =>
-          set((state) => {
-            const toolsToCopy =
-              state.tools.filter(
-                (
-                  tool
-                ) =>
-                  tool.borrowedBy ===
-                    oldWorkerName ||
-                  tool.holder ===
-                    oldWorkerName
-              );
-
-            const copiedTools =
-              toolsToCopy.map(
-                (tool) => ({
-                  ...tool,
-
-                  id: `${Date.now()}-${Math.random()}-${tool.name}`,
-
-                  holder:
-                    newWorkerName,
-
-                  borrowedBy:
-                    newWorkerName,
-
-                  location:
-                    newLocation,
-
-                  status:
-                    "In Use",
-                })
-              );
-
-            const logs =
-              copiedTools.map(
-                (tool) =>
-                  createLog({
-                    type:
-                      "ASSIGN",
-
-                    toolName:
-                      tool.name,
-
-                    quantity:
-                      tool.quantity,
-
-                    workerName:
-                      newWorkerName,
-
-                    location:
-                      newLocation,
-
-                    message: `${tool.name} x${tool.quantity} copied from ${oldWorkerName} to ${newWorkerName}`,
-                  })
-              );
-
-            return {
-              tools: [
-                ...state.tools,
-                ...copiedTools,
-              ],
-
-              historyLogs: [
-                ...logs,
-                ...state.historyLogs,
-              ],
-            };
-          }),
-      }),
-
-      {
-        name:
-          "my-tools-storage",
-
-        storage:
-          createJSONStorage(
-            () =>
-              AsyncStorage
+      deleteHistoryLog: (id) =>
+        set((state) => ({
+          historyLogs: state.historyLogs.filter(
+            (log) => log.id !== id
           ),
-      }
-    )
-  );
+        })),
+
+      clearHistoryLogs: () =>
+        set(() => ({
+          historyLogs: [],
+        })),
+
+      duplicateWorkerGroup: (
+        oldWorkerName,
+        newWorkerName,
+        newLocation
+      ) =>
+        set((state) => {
+          const toolsToCopy = state.tools.filter(
+            (tool) =>
+              tool.borrowedBy === oldWorkerName ||
+              tool.holder === oldWorkerName
+          );
+
+          const copiedTools = toolsToCopy.map((tool) => ({
+            ...tool,
+            id: createToolId(tool.name),
+            holder: newWorkerName,
+            borrowedBy: newWorkerName,
+            location: newLocation,
+            status: "In Use",
+          }));
+
+          const logs = copiedTools.map((tool) =>
+            createLog({
+              type: "ASSIGN",
+              toolName: tool.name,
+              quantity: tool.quantity,
+              workerName: newWorkerName,
+              location: newLocation,
+              message: `${tool.name} x${tool.quantity} copied from ${oldWorkerName} to ${newWorkerName}`,
+            })
+          );
+
+          return {
+            tools: [...state.tools, ...copiedTools],
+            historyLogs: [...logs, ...state.historyLogs],
+          };
+        }),
+    }),
+
+    {
+      name: "my-tools-storage",
+      storage: createJSONStorage(() => AsyncStorage),
+    }
+  )
+);

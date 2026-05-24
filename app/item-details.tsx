@@ -59,10 +59,18 @@ export default function ItemDetailsScreen() {
     selectedTool?.quantity || ""
   );
 
+  const [assignQuantity, setAssignQuantity] =
+    useState("1");
+
+  const [returnQuantity, setReturnQuantity] =
+    useState("1");
+
   if (!selectedTool) {
     return (
       <ScrollView style={styles.container}>
-        <Text style={styles.title}>Tool Not Found</Text>
+        <Text style={styles.title}>
+          Tool Not Found
+        </Text>
 
         <Text style={styles.subtitle}>
           This tool no longer exists.
@@ -72,13 +80,20 @@ export default function ItemDetailsScreen() {
           style={styles.backButton}
           onPress={() => router.back()}
         >
-          <Text style={styles.backButtonText}>Back</Text>
+          <Text style={styles.backButtonText}>
+            Back
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     );
   }
 
-  const realId = selectedTool.id || toolId;
+  const realId =
+    selectedTool.id || toolId;
+
+  const currentQuantity = Number(
+    selectedTool.quantity || 0
+  );
 
   const handleSaveQuantity = () => {
     updateTool(realId, {
@@ -87,29 +102,80 @@ export default function ItemDetailsScreen() {
       quantity,
     });
 
-    Alert.alert("Saved", "Quantity updated");
+    Alert.alert(
+      "Saved",
+      "Quantity updated"
+    );
   };
 
   const handleAssign = () => {
     if (!workerName.trim()) {
-      Alert.alert("Error", "Enter worker name");
+      Alert.alert(
+        "Error",
+        "Enter worker name"
+      );
+
       return;
     }
 
-    assignTool(realId, workerName.trim());
+    const qty = Number(assignQuantity);
+
+    if (!qty || qty <= 0) {
+      Alert.alert(
+        "Error",
+        "Enter valid quantity"
+      );
+
+      return;
+    }
+
+    if (qty > currentQuantity) {
+      Alert.alert(
+        "Error",
+        "Not enough quantity available"
+      );
+
+      return;
+    }
+
+    assignTool(
+      realId,
+      workerName.trim(),
+      qty
+    );
 
     Alert.alert(
       "Success",
-      `${selectedTool.name} assigned to ${workerName}`
+      `${selectedTool.name} x${qty} assigned to ${workerName}`
     );
 
     router.replace("/borrowed");
   };
 
   const handleReturn = () => {
+    const qty = Number(returnQuantity);
+
+    if (!qty || qty <= 0) {
+      Alert.alert(
+        "Error",
+        "Enter valid quantity"
+      );
+
+      return;
+    }
+
+    if (qty > currentQuantity) {
+      Alert.alert(
+        "Error",
+        "Return quantity too high"
+      );
+
+      return;
+    }
+
     Alert.alert(
       "Return Tool",
-      `Return ${selectedTool.name} to warehouse?`,
+      `Return ${qty}x ${selectedTool.name} to warehouse?`,
       [
         {
           text: "Cancel",
@@ -120,7 +186,7 @@ export default function ItemDetailsScreen() {
           text: "Return",
 
           onPress: () => {
-            returnTool(realId);
+            returnTool(realId, qty);
 
             router.replace("/(tabs)");
           },
@@ -171,7 +237,8 @@ export default function ItemDetailsScreen() {
             </Text>
 
             <Text style={styles.statusText}>
-              {selectedTool.status || "Unknown"}
+              {selectedTool.status ||
+                "Unknown"}
             </Text>
           </View>
 
@@ -179,14 +246,16 @@ export default function ItemDetailsScreen() {
             style={[
               styles.statusBadge,
               {
-                backgroundColor: getStatusColor(
-                  selectedTool.status
-                ),
+                backgroundColor:
+                  getStatusColor(
+                    selectedTool.status
+                  ),
               },
             ]}
           >
             <Text style={styles.badgeText}>
-              {selectedTool.status || "Unknown"}
+              {selectedTool.status ||
+                "Unknown"}
             </Text>
           </View>
         </View>
@@ -194,7 +263,9 @@ export default function ItemDetailsScreen() {
         <View style={styles.divider} />
 
         <Text style={styles.meta}>
-          Quantity: {selectedTool.quantity || "0"}
+          Quantity:{" "}
+          {selectedTool.quantity ||
+            "0"}
         </Text>
 
         <Text style={styles.meta}>
@@ -206,21 +277,26 @@ export default function ItemDetailsScreen() {
 
         <Text style={styles.meta}>
           Location:{" "}
-          {selectedTool.location || "No location"}
+          {selectedTool.location ||
+            "No location"}
         </Text>
 
         <Text style={styles.meta}>
           Profession:{" "}
-          {selectedTool.profession || "Not set"}
+          {selectedTool.profession ||
+            "Not set"}
         </Text>
 
         <Text style={styles.meta}>
           Category:{" "}
-          {selectedTool.category || "Not set"}
+          {selectedTool.category ||
+            "Not set"}
         </Text>
 
         <Text style={styles.meta}>
-          Brand: {selectedTool.brand || "No brand"}
+          Brand:{" "}
+          {selectedTool.brand ||
+            "No brand"}
         </Text>
       </View>
 
@@ -250,15 +326,26 @@ export default function ItemDetailsScreen() {
 
       <View style={styles.card}>
         <Text style={styles.label}>
-          Assign to worker
+          Assign To Worker
         </Text>
 
         <TextInput
-          placeholder="e.g. Ali, Mehmet, Team A"
+          placeholder="Worker name"
           placeholderTextColor="#888"
           style={styles.input}
           value={workerName}
           onChangeText={setWorkerName}
+        />
+
+        <TextInput
+          placeholder="Assign quantity"
+          placeholderTextColor="#888"
+          style={styles.input}
+          value={assignQuantity}
+          onChangeText={
+            setAssignQuantity
+          }
+          keyboardType="numeric"
         />
 
         <TouchableOpacity
@@ -271,17 +358,35 @@ export default function ItemDetailsScreen() {
         </TouchableOpacity>
       </View>
 
-      {selectedTool.status === "In Use" ||
+      {selectedTool.status ===
+        "In Use" ||
       selectedTool.borrowedBy ||
       selectedTool.holder ? (
-        <TouchableOpacity
-          style={styles.returnButton}
-          onPress={handleReturn}
-        >
-          <Text style={styles.buttonText}>
-            Return To Warehouse
+        <View style={styles.card}>
+          <Text style={styles.label}>
+            Return Quantity
           </Text>
-        </TouchableOpacity>
+
+          <TextInput
+            placeholder="Return quantity"
+            placeholderTextColor="#888"
+            style={styles.input}
+            value={returnQuantity}
+            onChangeText={
+              setReturnQuantity
+            }
+            keyboardType="numeric"
+          />
+
+          <TouchableOpacity
+            style={styles.returnButton}
+            onPress={handleReturn}
+          >
+            <Text style={styles.buttonText}>
+              Return To Warehouse
+            </Text>
+          </TouchableOpacity>
+        </View>
       ) : null}
 
       <TouchableOpacity
@@ -418,7 +523,6 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 14,
     alignItems: "center",
-    marginBottom: 12,
   },
 
   deleteButton: {

@@ -14,49 +14,50 @@ import {
 import { useToolStore } from "../../toolStore";
 
 export default function BorrowedScreen() {
-  const tools = useToolStore((state) => state.tools);
-
-  const deleteTool = useToolStore(
-    (state) => state.deleteTool
-  );
-
+  const tools = useToolStore((state) => state.tools || []);
+  const deleteTool = useToolStore((state) => state.deleteTool);
   const duplicateWorkerGroup = useToolStore(
     (state) => state.duplicateWorkerGroup
   );
 
-  const [copyingWorker, setCopyingWorker] =
-    useState<string | null>(null);
-
-  const [newWorkerName, setNewWorkerName] =
-    useState("");
-
-  const [newLocation, setNewLocation] =
-    useState("");
+  const [copyingWorker, setCopyingWorker] = useState<string | null>(null);
+  const [newWorkerName, setNewWorkerName] = useState("");
+  const [newLocation, setNewLocation] = useState("");
 
   const borrowedTools = tools.filter(
-    (tool) =>
-      tool.status === "In Use" ||
-      tool.holder ||
-      tool.borrowedBy
+    (tool) => tool.status === "In Use" || tool.holder || tool.borrowedBy
   );
 
-  const groupedByWorker = borrowedTools.reduce(
-    (acc, tool) => {
-      const workerName =
-        tool.borrowedBy ||
-        tool.holder ||
-        "Unknown Worker";
+  const groupedByWorker = borrowedTools.reduce((acc, tool) => {
+    const workerName = tool.borrowedBy || tool.holder || "Unknown Worker";
 
-      if (!acc[workerName]) {
-        acc[workerName] = [];
-      }
+    if (!acc[workerName]) {
+      acc[workerName] = [];
+    }
 
-      acc[workerName].push(tool);
+    acc[workerName].push(tool);
 
-      return acc;
-    },
-    {} as Record<string, typeof borrowedTools>
-  );
+    return acc;
+  }, {} as Record<string, typeof borrowedTools>);
+
+  const getWorkerLocation = (workerTools: typeof borrowedTools) => {
+    return workerTools.find((tool) => tool.location)?.location || "No location";
+  };
+
+  const getTotalQuantity = (workerTools: typeof borrowedTools) => {
+    return workerTools.reduce(
+      (sum, tool) => sum + Number(tool.quantity || 0),
+      0
+    );
+  };
+
+  const getBrokenCount = (workerTools: typeof borrowedTools) => {
+    return workerTools.filter((tool) => tool.status === "Broken").length;
+  };
+
+  const getMissingCount = (workerTools: typeof borrowedTools) => {
+    return workerTools.filter((tool) => tool.status === "Missing").length;
+  };
 
   const deleteWorkerGroup = (
     workerName: string,
@@ -66,40 +67,24 @@ export default function BorrowedScreen() {
       "Delete Worker Group",
       `Delete ${workerName} and all assigned tools?`,
       [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-
+        { text: "Cancel", style: "cancel" },
         {
           text: "Delete",
           style: "destructive",
-
           onPress: () => {
-            workerTools.forEach(
-              (tool, index) => {
-                const realId =
-                  tool.id ||
-                  `old-tool-${index}`;
-
-                deleteTool(realId);
-              }
-            );
+            workerTools.forEach((tool, index) => {
+              const realId = tool.id || `old-tool-${index}`;
+              deleteTool(realId);
+            });
           },
         },
       ]
     );
   };
 
-  const copyGroup = (
-    workerName: string
-  ) => {
+  const copyGroup = (workerName: string) => {
     if (!newWorkerName.trim()) {
-      Alert.alert(
-        "Error",
-        "Enter worker name"
-      );
-
+      Alert.alert("Error", "Enter worker name");
       return;
     }
 
@@ -110,209 +95,166 @@ export default function BorrowedScreen() {
     );
 
     setCopyingWorker(null);
-
     setNewWorkerName("");
     setNewLocation("");
 
-    Alert.alert(
-      "Success",
-      "Group copied"
-    );
+    Alert.alert("Success", "Worker group copied");
   };
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.title}>
-        Borrowed
-      </Text>
+      <Text style={styles.title}>Workers</Text>
 
-      <Text style={styles.subtitle}>
-        Active worker assignments
-      </Text>
+      <Text style={styles.subtitle}>Active worker assignments</Text>
+
+      <View style={styles.summaryCard}>
+        <View style={styles.summaryBox}>
+          <Text style={styles.summaryNumber}>
+            {Object.keys(groupedByWorker).length}
+          </Text>
+          <Text style={styles.summaryLabel}>Workers</Text>
+        </View>
+
+        <View style={styles.summaryBox}>
+          <Text style={styles.summaryNumber}>{borrowedTools.length}</Text>
+          <Text style={styles.summaryLabel}>Tool Lines</Text>
+        </View>
+
+        <View style={styles.summaryBox}>
+          <Text style={styles.summaryNumber}>
+            {getTotalQuantity(borrowedTools)}
+          </Text>
+          <Text style={styles.summaryLabel}>Total Qty</Text>
+        </View>
+      </View>
 
       {borrowedTools.length === 0 ? (
-        <Text style={styles.emptyText}>
-          No borrowed tools
-        </Text>
+        <Text style={styles.emptyText}>No borrowed tools</Text>
       ) : (
-        Object.entries(groupedByWorker).map(
-          ([workerName, workerTools]) => (
-            <View
-              key={workerName}
-              style={styles.workerCard}
-            >
+        Object.entries(groupedByWorker).map(([workerName, workerTools]) => {
+          const location = getWorkerLocation(workerTools);
+          const totalQuantity = getTotalQuantity(workerTools);
+          const brokenCount = getBrokenCount(workerTools);
+          const missingCount = getMissingCount(workerTools);
+
+          return (
+            <View key={workerName} style={styles.workerCard}>
               <TouchableOpacity
                 activeOpacity={0.85}
                 onPress={() =>
                   router.push({
-                    pathname:
-                      "/worker-details",
-
-                    params: {
-                      workerName,
-                    },
+                    pathname: "/worker-details",
+                    params: { workerName },
                   } as any)
                 }
               >
                 <View style={styles.topRow}>
-                  <View>
-                    <Text
-                      style={styles.workerName}
-                    >
-                      {workerName}
-                    </Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.workerName}>{workerName}</Text>
 
-                    <Text
-                      style={styles.summaryText}
-                    >
-                      {workerTools.length} tools assigned
+                    <Text style={styles.locationText}>
+                      Project / Location: {location}
                     </Text>
                   </View>
 
-                  <View
-                    style={styles.badge}
-                  >
-                    <Text
-                      style={
-                        styles.badgeText
-                      }
-                    >
-                      OPEN
-                    </Text>
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>OPEN</Text>
                   </View>
                 </View>
 
-                <Text
-                  style={styles.openText}
-                >
-                  Tap to open worker details
+                <View style={styles.statsRow}>
+                  <View style={styles.smallStat}>
+                    <Text style={styles.smallStatNumber}>
+                      {workerTools.length}
+                    </Text>
+                    <Text style={styles.smallStatLabel}>Lines</Text>
+                  </View>
+
+                  <View style={styles.smallStat}>
+                    <Text style={styles.smallStatNumber}>{totalQuantity}</Text>
+                    <Text style={styles.smallStatLabel}>Qty</Text>
+                  </View>
+
+                  <View style={styles.smallStat}>
+                    <Text style={styles.problemNumber}>{brokenCount}</Text>
+                    <Text style={styles.smallStatLabel}>Broken</Text>
+                  </View>
+
+                  <View style={styles.smallStat}>
+                    <Text style={styles.warningNumber}>{missingCount}</Text>
+                    <Text style={styles.smallStatLabel}>Missing</Text>
+                  </View>
+                </View>
+
+                <Text style={styles.previewText}>
+                  {workerTools
+                    .slice(0, 3)
+                    .map((tool) => `${tool.quantity || "0"}x ${tool.name}`)
+                    .join(" · ")}
+                  {workerTools.length > 3 ? " · ..." : ""}
                 </Text>
+
+                <Text style={styles.openText}>Tap to open worker details</Text>
               </TouchableOpacity>
 
-              {copyingWorker ===
-              workerName ? (
-                <View
-                  style={styles.copyBox}
-                >
+              {copyingWorker === workerName ? (
+                <View style={styles.copyBox}>
                   <TextInput
                     placeholder="New worker name"
                     placeholderTextColor="#888"
                     style={styles.input}
                     value={newWorkerName}
-                    onChangeText={
-                      setNewWorkerName
-                    }
+                    onChangeText={setNewWorkerName}
                   />
 
                   <TextInput
-                    placeholder="New location"
+                    placeholder="New location / project"
                     placeholderTextColor="#888"
                     style={styles.input}
                     value={newLocation}
-                    onChangeText={
-                      setNewLocation
-                    }
+                    onChangeText={setNewLocation}
                   />
 
-                  <View
-                    style={
-                      styles.copyButtons
-                    }
-                  >
+                  <View style={styles.copyButtons}>
                     <TouchableOpacity
-                      style={
-                        styles.saveButton
-                      }
-                      onPress={() =>
-                        copyGroup(
-                          workerName
-                        )
-                      }
+                      style={styles.saveButton}
+                      onPress={() => copyGroup(workerName)}
                     >
-                      <Text
-                        style={
-                          styles.buttonText
-                        }
-                      >
-                        Save
-                      </Text>
+                      <Text style={styles.buttonText}>Save Copy</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                      style={
-                        styles.cancelButton
-                      }
+                      style={styles.cancelButton}
                       onPress={() => {
-                        setCopyingWorker(
-                          null
-                        );
-
-                        setNewWorkerName(
-                          ""
-                        );
-
-                        setNewLocation(
-                          ""
-                        );
+                        setCopyingWorker(null);
+                        setNewWorkerName("");
+                        setNewLocation("");
                       }}
                     >
-                      <Text
-                        style={
-                          styles.buttonText
-                        }
-                      >
-                        Cancel
-                      </Text>
+                      <Text style={styles.buttonText}>Cancel</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
               ) : (
-                <View
-                  style={styles.actionRow}
-                >
+                <View style={styles.actionRow}>
                   <TouchableOpacity
-                    style={
-                      styles.copyButton
-                    }
-                    onPress={() =>
-                      setCopyingWorker(
-                        workerName
-                      )
-                    }
+                    style={styles.copyButton}
+                    onPress={() => setCopyingWorker(workerName)}
                   >
-                    <Text
-                      style={
-                        styles.buttonText
-                      }
-                    >
-                      Copy
-                    </Text>
+                    <Text style={styles.buttonText}>Copy Group</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={
-                      styles.deleteButton
-                    }
-                    onPress={() =>
-                      deleteWorkerGroup(
-                        workerName,
-                        workerTools
-                      )
-                    }
+                    style={styles.deleteButton}
+                    onPress={() => deleteWorkerGroup(workerName, workerTools)}
                   >
-                    <Text
-                      style={
-                        styles.buttonText
-                      }
-                    >
-                      Delete
-                    </Text>
+                    <Text style={styles.buttonText}>Delete Group</Text>
                   </TouchableOpacity>
                 </View>
               )}
             </View>
-          )
-        )
+          );
+        })
       )}
 
       <View style={{ height: 80 }} />
@@ -340,6 +282,38 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
 
+  summaryCard: {
+    backgroundColor: "#111c34",
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 16,
+    flexDirection: "row",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#1f2937",
+  },
+
+  summaryBox: {
+    flex: 1,
+    backgroundColor: "#020b1f",
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#374151",
+  },
+
+  summaryNumber: {
+    color: "#ff6b00",
+    fontSize: 24,
+    fontWeight: "bold",
+  },
+
+  summaryLabel: {
+    color: "#9ca3af",
+    fontSize: 11,
+    marginTop: 3,
+  },
+
   emptyText: {
     color: "#9ca3af",
     fontSize: 16,
@@ -351,6 +325,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 16,
     marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "#1f2937",
   },
 
   topRow: {
@@ -365,16 +341,10 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
 
-  summaryText: {
+  locationText: {
     color: "#d1d5db",
-    fontSize: 14,
-    marginTop: 4,
-  },
-
-  openText: {
-    color: "#9ca3af",
     fontSize: 13,
-    marginTop: 10,
+    marginTop: 4,
   },
 
   badge: {
@@ -382,12 +352,64 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 6,
+    marginLeft: 10,
   },
 
   badgeText: {
     color: "#60a5fa",
     fontSize: 11,
     fontWeight: "bold",
+  },
+
+  statsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 14,
+  },
+
+  smallStat: {
+    flex: 1,
+    backgroundColor: "#020b1f",
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "#1f2937",
+  },
+
+  smallStatNumber: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+
+  smallStatLabel: {
+    color: "#9ca3af",
+    fontSize: 11,
+    marginTop: 3,
+  },
+
+  problemNumber: {
+    color: "#f87171",
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+
+  warningNumber: {
+    color: "#fbbf24",
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+
+  previewText: {
+    color: "#d1d5db",
+    fontSize: 13,
+    marginTop: 14,
+  },
+
+  openText: {
+    color: "#9ca3af",
+    fontSize: 13,
+    marginTop: 8,
   },
 
   actionRow: {
@@ -399,7 +421,7 @@ const styles = StyleSheet.create({
   copyButton: {
     flex: 1,
     backgroundColor: "#2563eb",
-    paddingVertical: 10,
+    paddingVertical: 11,
     borderRadius: 12,
     alignItems: "center",
   },
@@ -407,7 +429,7 @@ const styles = StyleSheet.create({
   deleteButton: {
     flex: 1,
     backgroundColor: "#7f1d1d",
-    paddingVertical: 10,
+    paddingVertical: 11,
     borderRadius: 12,
     alignItems: "center",
   },

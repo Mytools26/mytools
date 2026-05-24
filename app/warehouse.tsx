@@ -34,7 +34,9 @@ const getToolIcon = (toolName: string) => {
 const guessCategory = (toolName: string) => {
   const name = toolName.toLowerCase();
 
-  if (name.includes("screwdriver")) return "Screwdrivers";
+  if (name.includes("screwdriver")) {
+    return "Screwdrivers";
+  }
 
   if (
     name.includes("drill") ||
@@ -155,18 +157,22 @@ export default function WarehouseScreen() {
         acc[tool.section] = [];
       }
 
-      acc[tool.section].push(tool.name);
+      if (!acc[tool.section].includes(tool.name)) {
+        acc[tool.section].push(tool.name);
+      }
 
       return acc;
     },
     {} as Record<string, string[]>
   );
 
-  const getCurrentValue = (toolName: string) => {
-    return (
+  const getWarehouseTotal = (
+    toolName: string
+  ) => {
+    return Number(
       draftStock[toolName] ??
-      warehouseStock[toolName] ??
-      ""
+        warehouseStock[toolName] ??
+        0
     );
   };
 
@@ -191,21 +197,52 @@ export default function WarehouseScreen() {
   const getAvailableQuantity = (
     toolName: string
   ) => {
-    const total = Number(
-      getCurrentValue(toolName) || 0
-    );
+    const total =
+      getWarehouseTotal(toolName);
 
-    const assigned = getAssignedQuantity(
-      toolName
-    );
+    const assigned =
+      getAssignedQuantity(toolName);
 
-    return total - assigned;
+    return Math.max(total - assigned, 0);
   };
 
-  const saveQuantity = (toolName: string) => {
-    const value = getCurrentValue(toolName);
+  const getToolStatus = (
+    toolName: string
+  ) => {
+    const available =
+      getAvailableQuantity(toolName);
 
-    setWarehouseQuantity(toolName, value);
+    if (available <= 0) {
+      return {
+        text: "Out Of Stock",
+        color: "#ef4444",
+      };
+    }
+
+    if (available <= 2) {
+      return {
+        text: "Low Stock",
+        color: "#f59e0b",
+      };
+    }
+
+    return {
+      text: "In Stock",
+      color: "#22c55e",
+    };
+  };
+
+  const saveQuantity = (
+    toolName: string
+  ) => {
+    const value = String(
+      getWarehouseTotal(toolName)
+    );
+
+    setWarehouseQuantity(
+      toolName,
+      value
+    );
 
     Alert.alert(
       "Saved",
@@ -273,7 +310,7 @@ export default function WarehouseScreen() {
       </Text>
 
       <Text style={styles.subtitle}>
-        Manage warehouse stock and tools
+        Smart warehouse management
       </Text>
 
       <View style={styles.topCard}>
@@ -351,7 +388,7 @@ export default function WarehouseScreen() {
 
             {sectionTools.map((toolName) => {
               const total =
-                getCurrentValue(toolName);
+                getWarehouseTotal(toolName);
 
               const assigned =
                 getAssignedQuantity(toolName);
@@ -359,14 +396,33 @@ export default function WarehouseScreen() {
               const available =
                 getAvailableQuantity(toolName);
 
-              const isNegative =
-                available < 0;
+              const status =
+                getToolStatus(toolName);
 
               return (
                 <TouchableOpacity
                   key={toolName}
                   style={styles.toolCard}
                   activeOpacity={0.9}
+                  onPress={() => {
+                    const firstTool =
+                      tools.find(
+                        (tool) =>
+                          tool.name === toolName
+                      );
+
+                    if (firstTool?.id) {
+                      router.push({
+                        pathname:
+                          "/item-details",
+
+                        params: {
+                          toolId:
+                            firstTool.id,
+                        },
+                      });
+                    }
+                  }}
                 >
                   <View style={styles.leftBox}>
                     <Text style={styles.icon}>
@@ -383,19 +439,29 @@ export default function WarehouseScreen() {
                       <Text
                         style={styles.toolMeta}
                       >
-                        Total:{" "}
-                        {total || "0"} ·
+                        Total: {total} ·
                         Assigned: {assigned}
                       </Text>
 
                       <Text
-                        style={[
-                          styles.availableText,
-                          isNegative &&
-                            styles.negativeText,
-                        ]}
+                        style={
+                          styles.availableText
+                        }
                       >
-                        Available: {available}
+                        Available:{" "}
+                        {available}
+                      </Text>
+
+                      <Text
+                        style={{
+                          color:
+                            status.color,
+                          fontWeight:
+                            "bold",
+                          marginTop: 4,
+                        }}
+                      >
+                        {status.text}
                       </Text>
                     </View>
                   </View>
@@ -407,12 +473,13 @@ export default function WarehouseScreen() {
                       style={
                         styles.quantityInput
                       }
-                      value={total}
+                      value={String(total)}
                       onChangeText={(value) =>
                         setDraftStock(
                           (current) => ({
                             ...current,
-                            [toolName]: value,
+                            [toolName]:
+                              value,
                           })
                         )
                       }
@@ -422,7 +489,9 @@ export default function WarehouseScreen() {
                     <TouchableOpacity
                       style={styles.saveButton}
                       onPress={() =>
-                        saveQuantity(toolName)
+                        saveQuantity(
+                          toolName
+                        )
                       }
                     >
                       <Text
@@ -595,10 +664,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "bold",
     marginTop: 4,
-  },
-
-  negativeText: {
-    color: "#f87171",
   },
 
   rightBox: {
