@@ -16,16 +16,48 @@ import toolCatalog from "./toolCatalog";
 
 const professions = Object.keys(toolCatalog || {});
 
+const getToolIcon = (toolName: string) => {
+  const name = toolName.toLowerCase();
+
+  if (name.includes("drill")) return "🛠️";
+  if (name.includes("screwdriver")) return "🪛";
+  if (name.includes("battery")) return "🔋";
+  if (name.includes("ladder")) return "🪜";
+  if (name.includes("tester")) return "📟";
+  if (name.includes("grinder")) return "⚙️";
+  if (name.includes("saw")) return "🪚";
+  if (name.includes("light")) return "💡";
+
+  return "🔧";
+};
+
 const guessCategory = (toolName: string) => {
   const name = toolName.toLowerCase();
 
   if (name.includes("screwdriver")) return "Screwdrivers";
-  if (name.includes("drill") || name.includes("grinder") || name.includes("saw")) return "PowerTools";
-  if (name.includes("battery") || name.includes("charger")) return "BatteriesChargers";
-  if (name.includes("meter") || name.includes("tester") || name.includes("laser")) return "MeasuringTools";
-  if (name.includes("cable") || name.includes("wire") || name.includes("crimp")) return "CableTools";
-  if (name.includes("glove") || name.includes("helmet") || name.includes("glasses")) return "SafetyEquipment";
-  if (name.includes("light")) return "Lighting";
+
+  if (
+    name.includes("drill") ||
+    name.includes("grinder") ||
+    name.includes("saw")
+  ) {
+    return "PowerTools";
+  }
+
+  if (
+    name.includes("battery") ||
+    name.includes("charger")
+  ) {
+    return "BatteriesChargers";
+  }
+
+  if (
+    name.includes("meter") ||
+    name.includes("tester") ||
+    name.includes("laser")
+  ) {
+    return "MeasuringTools";
+  }
 
   return "CustomTools";
 };
@@ -37,60 +69,73 @@ const getAutoImage = (toolName: string) => {
   if (name.includes("screwdriver")) return "screwdriver";
   if (name.includes("battery")) return "battery";
   if (name.includes("ladder")) return "ladder";
-  if (name.includes("meter") || name.includes("tester")) return "tester";
-  if (name.includes("cutter")) return "cutter";
+  if (name.includes("tester")) return "tester";
   if (name.includes("grinder")) return "grinder";
   if (name.includes("saw")) return "saw";
   if (name.includes("light")) return "light";
-
-  if (
-    name.includes("terminal") ||
-    name.includes("cable") ||
-    name.includes("junction") ||
-    name.includes("breaker") ||
-    name.includes("relay") ||
-    name.includes("contactor")
-  ) {
-    return "electrical";
-  }
 
   return "tool";
 };
 
 export default function WarehouseScreen() {
-  const warehouseStock = useToolStore((state) => state.warehouseStock || {});
-  const setWarehouseQuantity = useToolStore((state) => state.setWarehouseQuantity);
-  const tools = useToolStore((state) => state.tools || []);
-  const customTools = useToolStore((state) => state.customTools || []);
-  const addCustomTool = useToolStore((state) => state.addCustomTool);
+  const warehouseStock = useToolStore(
+    (state) => state.warehouseStock || {}
+  );
 
-  const [profession, setProfession] = useState(professions[0] || "Electrician");
+  const setWarehouseQuantity = useToolStore(
+    (state) => state.setWarehouseQuantity
+  );
+
+  const tools = useToolStore(
+    (state) => state.tools || []
+  );
+
+  const customTools = useToolStore(
+    (state) => state.customTools || []
+  );
+
+  const addCustomTool = useToolStore(
+    (state) => state.addCustomTool
+  );
+
+  const [profession, setProfession] = useState(
+    professions[0] || "Electrician"
+  );
+
   const [search, setSearch] = useState("");
+
   const [quantity, setQuantity] = useState("");
-  const [draftStock, setDraftStock] = useState<Record<string, string>>({});
+
+  const [draftStock, setDraftStock] = useState<
+    Record<string, string>
+  >({});
 
   const currentCatalog =
-    toolCatalog[profession as keyof typeof toolCatalog] || {};
+    toolCatalog[
+      profession as keyof typeof toolCatalog
+    ] || {};
 
   const allTools = useMemo(() => {
-    const catalogTools = Object.entries(currentCatalog).flatMap(
-      ([sectionName, sectionTools]) => {
-        const safeTools = Array.isArray(sectionTools) ? sectionTools : [];
+    const catalogTools = Object.entries(
+      currentCatalog
+    ).flatMap(([sectionName, sectionTools]) => {
+      const safeTools = Array.isArray(sectionTools)
+        ? sectionTools
+        : [];
 
-        return safeTools.map((toolName) => ({
-          name: toolName,
-          section: sectionName,
-          isCustom: false,
-        }));
-      }
-    );
+      return safeTools.map((toolName) => ({
+        name: toolName,
+        section: sectionName,
+      }));
+    });
 
     const customProfessionTools = customTools
-      .filter((tool) => tool.profession === profession)
+      .filter(
+        (tool) => tool.profession === profession
+      )
       .map((tool) => ({
         name: tool.name,
         section: tool.category || "CustomTools",
-        isCustom: true,
       }));
 
     return [...catalogTools, ...customProfessionTools];
@@ -98,148 +143,182 @@ export default function WarehouseScreen() {
 
   const searchText = search.trim().toLowerCase();
 
-  const exactTool = allTools.find(
-    (tool) => tool.name.toLowerCase() === searchText
-  );
-
   const filteredTools = searchText
-    ? allTools.filter((tool) => tool.name.toLowerCase().includes(searchText))
+    ? allTools.filter((tool) =>
+        tool.name.toLowerCase().includes(searchText)
+      )
     : allTools;
 
-  const groupedTools = filteredTools.reduce((acc, tool) => {
-    if (!acc[tool.section]) {
-      acc[tool.section] = [];
-    }
+  const groupedTools = filteredTools.reduce(
+    (acc, tool) => {
+      if (!acc[tool.section]) {
+        acc[tool.section] = [];
+      }
 
-    acc[tool.section].push(tool.name);
+      acc[tool.section].push(tool.name);
 
-    return acc;
-  }, {} as Record<string, string[]>);
+      return acc;
+    },
+    {} as Record<string, string[]>
+  );
 
   const getCurrentValue = (toolName: string) => {
-    return draftStock[toolName] ?? warehouseStock[toolName] ?? "";
+    return (
+      draftStock[toolName] ??
+      warehouseStock[toolName] ??
+      ""
+    );
   };
 
-  const getAssignedQuantity = (toolName: string) => {
+  const getAssignedQuantity = (
+    toolName: string
+  ) => {
     return tools
       .filter(
         (tool) =>
           tool.name === toolName &&
-          (tool.status === "In Use" || tool.borrowedBy || tool.holder)
+          (tool.status === "In Use" ||
+            tool.borrowedBy ||
+            tool.holder)
       )
-      .reduce((sum, tool) => sum + Number(tool.quantity || 0), 0);
+      .reduce(
+        (sum, tool) =>
+          sum + Number(tool.quantity || 0),
+        0
+      );
   };
 
-  const getAvailableQuantity = (toolName: string) => {
-    const total = Number(getCurrentValue(toolName) || 0);
-    const assigned = getAssignedQuantity(toolName);
+  const getAvailableQuantity = (
+    toolName: string
+  ) => {
+    const total = Number(
+      getCurrentValue(toolName) || 0
+    );
+
+    const assigned = getAssignedQuantity(
+      toolName
+    );
 
     return total - assigned;
   };
 
   const saveQuantity = (toolName: string) => {
-    const savedQuantity = getCurrentValue(toolName);
-    setWarehouseQuantity(toolName, savedQuantity);
-    Alert.alert("Saved", `${toolName} stock saved.`);
+    const value = getCurrentValue(toolName);
+
+    setWarehouseQuantity(toolName, value);
+
+    Alert.alert(
+      "Saved",
+      `${toolName} stock updated`
+    );
   };
 
   const saveSmartTool = () => {
-    const name = search.trim();
+    const toolName = search.trim();
 
-    if (!name) {
-      Alert.alert("Error", "Type a tool name first.");
+    if (!toolName) {
+      Alert.alert(
+        "Error",
+        "Enter tool name"
+      );
+
       return;
     }
 
     if (!quantity.trim()) {
-      Alert.alert("Error", "Enter quantity.");
+      Alert.alert(
+        "Error",
+        "Enter quantity"
+      );
+
       return;
     }
 
-    const category = exactTool?.section || guessCategory(name);
+    const existingTool = allTools.find(
+      (tool) =>
+        tool.name.toLowerCase() ===
+        toolName.toLowerCase()
+    );
 
-    if (!exactTool) {
+    if (!existingTool) {
       addCustomTool({
-        id: `${Date.now()}-${name}`,
-        name,
+        id: `${Date.now()}-${toolName}`,
+        name: toolName,
         profession,
-        category,
-        image: getAutoImage(name),
+        category: guessCategory(toolName),
+        image: getAutoImage(toolName),
       });
     }
 
-    setWarehouseQuantity(name, quantity.trim());
-
-    setDraftStock((current) => ({
-      ...current,
-      [name]: quantity.trim(),
-    }));
+    setWarehouseQuantity(
+      toolName,
+      quantity.trim()
+    );
 
     Alert.alert(
       "Saved",
-      exactTool ? `${name} quantity updated.` : `${name} added as custom tool.`
+      existingTool
+        ? `${toolName} updated`
+        : `${toolName} added`
     );
 
     setSearch("");
     setQuantity("");
   };
 
-  const renderProfessionButton = (item: string) => (
-    <TouchableOpacity
-      key={item}
-      style={[
-        styles.optionButton,
-        profession === item && styles.optionButtonActive,
-      ]}
-      onPress={() => {
-        setProfession(item);
-        setSearch("");
-        setQuantity("");
-      }}
-    >
-      <Text
-        style={[
-          styles.optionText,
-          profession === item && styles.optionTextActive,
-        ]}
-      >
-        {item}
-      </Text>
-    </TouchableOpacity>
-  );
-
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.title}>Warehouse Stock</Text>
-
-      <Text style={styles.subtitle}>
-        Search a tool, set quantity, or add it if it does not exist
+      <Text style={styles.title}>
+        Warehouse
       </Text>
 
-      <Text style={styles.label}>Profession</Text>
+      <Text style={styles.subtitle}>
+        Manage warehouse stock and tools
+      </Text>
 
-      <View style={styles.optionsWrap}>
-        {professions.map(renderProfessionButton)}
-      </View>
+      <View style={styles.topCard}>
+        <Text style={styles.label}>
+          Profession
+        </Text>
 
-      <View style={styles.smartCard}>
-        <Text style={styles.sectionTitle}>Smart Tool Search</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ marginBottom: 18 }}
+        >
+          {professions.map((item) => (
+            <TouchableOpacity
+              key={item}
+              style={[
+                styles.professionButton,
+                profession === item &&
+                  styles.professionButtonActive,
+              ]}
+              onPress={() => {
+                setProfession(item);
+                setSearch("");
+              }}
+            >
+              <Text
+                style={[
+                  styles.professionText,
+                  profession === item &&
+                    styles.professionTextActive,
+                ]}
+              >
+                {item}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
         <TextInput
-          placeholder="Type tool name..."
+          placeholder="Search or add tool..."
           placeholderTextColor="#888"
           style={styles.input}
           value={search}
           onChangeText={setSearch}
         />
-
-        {search.trim() ? (
-          <Text style={exactTool ? styles.foundText : styles.notFoundText}>
-            {exactTool
-              ? `Tool found in ${exactTool.section}`
-              : "Tool not found. It will be added as a new custom tool."}
-          </Text>
-        ) : null}
 
         <TextInput
           placeholder="Quantity"
@@ -250,73 +329,128 @@ export default function WarehouseScreen() {
           keyboardType="numeric"
         />
 
-        <TouchableOpacity style={styles.addButton} onPress={saveSmartTool}>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={saveSmartTool}
+        >
           <Text style={styles.addButtonText}>
-            {exactTool ? "Save Quantity" : "Add / Save Tool"}
+            Save Tool
           </Text>
         </TouchableOpacity>
       </View>
 
-      {Object.entries(groupedTools).map(([sectionName, sectionTools]) => (
-        <View key={sectionName} style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>{sectionName}</Text>
+      {Object.entries(groupedTools).map(
+        ([sectionName, sectionTools]) => (
+          <View
+            key={sectionName}
+            style={styles.sectionCard}
+          >
+            <Text style={styles.sectionTitle}>
+              {sectionName}
+            </Text>
 
-          {sectionTools.map((toolName) => {
-            const total = getCurrentValue(toolName);
-            const assigned = getAssignedQuantity(toolName);
-            const available = getAvailableQuantity(toolName);
-            const isNegative = available < 0;
+            {sectionTools.map((toolName) => {
+              const total =
+                getCurrentValue(toolName);
 
-            return (
-              <View key={toolName} style={styles.toolRow}>
-                <View style={styles.toolInfo}>
-                  <Text style={styles.toolName}>{toolName}</Text>
+              const assigned =
+                getAssignedQuantity(toolName);
 
-                  <Text style={styles.toolMeta}>
-                    Total: {total || "0"} · Assigned: {assigned}
-                  </Text>
+              const available =
+                getAvailableQuantity(toolName);
 
-                  <Text
-                    style={[
-                      styles.availableText,
-                      isNegative && styles.negativeText,
-                    ]}
-                  >
-                    Available: {available}
-                  </Text>
-                </View>
+              const isNegative =
+                available < 0;
 
-                <View style={styles.rightBox}>
-                  <TextInput
-                    placeholder="0"
-                    placeholderTextColor="#888"
-                    style={styles.quantityInput}
-                    value={total}
-                    onChangeText={(value) =>
-                      setDraftStock((current) => ({
-                        ...current,
-                        [toolName]: value,
-                      }))
-                    }
-                    keyboardType="numeric"
-                  />
+              return (
+                <TouchableOpacity
+                  key={toolName}
+                  style={styles.toolCard}
+                  activeOpacity={0.9}
+                >
+                  <View style={styles.leftBox}>
+                    <Text style={styles.icon}>
+                      {getToolIcon(toolName)}
+                    </Text>
 
-                  <TouchableOpacity
-                    style={styles.saveButton}
-                    onPress={() => saveQuantity(toolName)}
-                  >
-                    <Text style={styles.saveButtonText}>Save</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            );
-          })}
-        </View>
-      ))}
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={styles.toolName}
+                      >
+                        {toolName}
+                      </Text>
 
-      <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-        <Text style={styles.backButtonText}>Back</Text>
+                      <Text
+                        style={styles.toolMeta}
+                      >
+                        Total:{" "}
+                        {total || "0"} ·
+                        Assigned: {assigned}
+                      </Text>
+
+                      <Text
+                        style={[
+                          styles.availableText,
+                          isNegative &&
+                            styles.negativeText,
+                        ]}
+                      >
+                        Available: {available}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.rightBox}>
+                    <TextInput
+                      placeholder="0"
+                      placeholderTextColor="#888"
+                      style={
+                        styles.quantityInput
+                      }
+                      value={total}
+                      onChangeText={(value) =>
+                        setDraftStock(
+                          (current) => ({
+                            ...current,
+                            [toolName]: value,
+                          })
+                        )
+                      }
+                      keyboardType="numeric"
+                    />
+
+                    <TouchableOpacity
+                      style={styles.saveButton}
+                      onPress={() =>
+                        saveQuantity(toolName)
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.saveButtonText
+                        }
+                      >
+                        Save
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )
+      )}
+
+      <TouchableOpacity
+        style={styles.backButton}
+        onPress={() => router.back()}
+      >
+        <Text style={styles.backButtonText}>
+          Back
+        </Text>
       </TouchableOpacity>
+
+      <View style={{ height: 70 }} />
     </ScrollView>
   );
 }
@@ -325,148 +459,140 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#020b1f",
-    padding: 20,
+    padding: 16,
   },
 
   title: {
     color: "white",
-    fontSize: 40,
+    fontSize: 42,
     fontWeight: "bold",
-    marginTop: 60,
+    marginTop: 54,
   },
 
   subtitle: {
     color: "#9ca3af",
-    fontSize: 18,
-    marginBottom: 24,
+    fontSize: 16,
+    marginBottom: 20,
+  },
+
+  topCard: {
+    backgroundColor: "#111c34",
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: "#1f2937",
   },
 
   label: {
     color: "white",
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: "bold",
     marginBottom: 10,
+  },
+
+  professionButton: {
+    backgroundColor: "#020b1f",
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: "#374151",
+  },
+
+  professionButtonActive: {
+    backgroundColor: "#ff6b00",
+    borderColor: "#ff6b00",
+  },
+
+  professionText: {
+    color: "#d1d5db",
+    fontSize: 15,
+    fontWeight: "bold",
+  },
+
+  professionTextActive: {
+    color: "white",
   },
 
   input: {
     backgroundColor: "#020b1f",
     color: "white",
-    padding: 16,
-    borderRadius: 14,
-    fontSize: 17,
+    padding: 14,
+    borderRadius: 13,
+    fontSize: 16,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: "#374151",
   },
 
-  smartCard: {
-    backgroundColor: "#111c34",
-    borderRadius: 22,
-    padding: 16,
-    marginBottom: 18,
-  },
-
-  foundText: {
-    color: "#86efac",
-    fontSize: 15,
-    fontWeight: "bold",
-    marginBottom: 12,
-  },
-
-  notFoundText: {
-    color: "#fbbf24",
-    fontSize: 15,
-    fontWeight: "bold",
-    marginBottom: 12,
-  },
-
-  optionsWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginBottom: 22,
-  },
-
-  optionButton: {
-    backgroundColor: "#111c34",
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: "#1f2937",
-  },
-
-  optionButtonActive: {
-    backgroundColor: "#ff6b00",
-    borderColor: "#ff6b00",
-  },
-
-  optionText: {
-    color: "#d1d5db",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-
-  optionTextActive: {
-    color: "white",
-  },
-
   addButton: {
     backgroundColor: "#ff6b00",
-    padding: 16,
-    borderRadius: 14,
+    padding: 15,
+    borderRadius: 13,
     alignItems: "center",
   },
 
   addButtonText: {
     color: "white",
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "bold",
   },
 
   sectionCard: {
     backgroundColor: "#111c34",
-    borderRadius: 22,
-    padding: 16,
-    marginBottom: 18,
+    borderRadius: 20,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#1f2937",
   },
 
   sectionTitle: {
     color: "#ff6b00",
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "bold",
     marginBottom: 12,
   },
 
-  toolRow: {
+  toolCard: {
+    backgroundColor: "#020b1f",
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 10,
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
-    borderBottomColor: "#1f2937",
-    borderBottomWidth: 1,
-    paddingVertical: 14,
+    alignItems: "center",
   },
 
-  toolInfo: {
+  leftBox: {
+    flexDirection: "row",
     flex: 1,
-    paddingRight: 12,
+    alignItems: "center",
+    paddingRight: 10,
+  },
+
+  icon: {
+    fontSize: 24,
+    marginRight: 10,
   },
 
   toolName: {
     color: "white",
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "bold",
   },
 
   toolMeta: {
     color: "#9ca3af",
-    fontSize: 13,
+    fontSize: 12,
     marginTop: 4,
   },
 
   availableText: {
     color: "#86efac",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "bold",
     marginTop: 4,
   },
@@ -480,44 +606,43 @@ const styles = StyleSheet.create({
   },
 
   quantityInput: {
-    backgroundColor: "#020b1f",
+    backgroundColor: "#111c34",
     color: "white",
-    width: 85,
-    padding: 12,
+    width: 75,
+    padding: 10,
     borderRadius: 12,
-    fontSize: 18,
     textAlign: "center",
     borderWidth: 1,
     borderColor: "#374151",
+    fontSize: 16,
   },
 
   saveButton: {
     backgroundColor: "#ff6b00",
-    paddingVertical: 8,
-    paddingHorizontal: 16,
     borderRadius: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 14,
     marginTop: 8,
   },
 
   saveButtonText: {
     color: "white",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "bold",
   },
 
   backButton: {
-    borderColor: "#374151",
     borderWidth: 1,
-    padding: 18,
-    borderRadius: 16,
+    borderColor: "#374151",
+    padding: 16,
+    borderRadius: 14,
     alignItems: "center",
-    marginTop: 14,
-    marginBottom: 60,
+    marginTop: 10,
   },
 
   backButtonText: {
     color: "white",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "bold",
   },
 });
