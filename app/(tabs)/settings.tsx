@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import {
   Alert,
   ScrollView,
+  Share,
   StyleSheet,
   Switch,
   Text,
@@ -13,6 +14,7 @@ import {
 } from "react-native";
 
 const SETTINGS_KEY = "my-tools-settings";
+const STORAGE_KEY = "my-tools-storage";
 
 export default function SettingsScreen() {
   const [companyName, setCompanyName] = useState("MyTools Company");
@@ -42,6 +44,23 @@ export default function SettingsScreen() {
     );
 
     Alert.alert("Saved", "Settings saved successfully.");
+  };
+
+  const exportBackup = async () => {
+    const appData = await AsyncStorage.getItem(STORAGE_KEY);
+    const settingsData = await AsyncStorage.getItem(SETTINGS_KEY);
+
+    const backup = {
+      appName: "MyTools",
+      exportedAt: new Date().toISOString(),
+      settings: settingsData ? JSON.parse(settingsData) : null,
+      storage: appData ? JSON.parse(appData) : null,
+    };
+
+    await Share.share({
+      title: "MyTools Backup",
+      message: JSON.stringify(backup, null, 2),
+    });
   };
 
   const resetApp = async () => {
@@ -85,13 +104,25 @@ export default function SettingsScreen() {
 
       <View style={styles.card}>
         <View style={styles.switchRow}>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.label}>Dark Mode</Text>
-            <Text style={styles.hint}>Visual switch saved for later theme system</Text>
+            <Text style={styles.hint}>Saved for later full theme system</Text>
           </View>
 
           <Switch value={darkMode} onValueChange={setDarkMode} />
         </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.label}>Backup</Text>
+
+        <Text style={styles.hint}>
+          Export all local app data as a backup text file/share message.
+        </Text>
+
+        <TouchableOpacity style={styles.exportButton} onPress={exportBackup}>
+          <Text style={styles.buttonText}>Export Backup</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.dangerCard}>
@@ -149,8 +180,8 @@ const styles = StyleSheet.create({
 
   hint: {
     color: "#9ca3af",
-    fontSize: 12,
-    marginTop: -4,
+    fontSize: 13,
+    marginBottom: 12,
   },
 
   input: {
@@ -175,6 +206,14 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     alignItems: "center",
     marginTop: 14,
+  },
+
+  exportButton: {
+    backgroundColor: "#2563eb",
+    padding: 14,
+    borderRadius: 13,
+    alignItems: "center",
+    marginTop: 4,
   },
 
   dangerCard: {
