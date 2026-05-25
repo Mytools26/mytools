@@ -1,5 +1,5 @@
-import { useLocalSearchParams } from "expo-router";
-import React, { useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useMemo, useState } from "react";
 
 import {
   Alert,
@@ -14,6 +14,36 @@ import {
 import { useToolStore } from "../toolStore";
 import { exportPdf } from "./utils/pdf";
 
+const getStatusColor = (status?: string) => {
+  switch (status) {
+    case "Available":
+      return "#16a34a";
+    case "In Use":
+      return "#2563eb";
+    case "Missing":
+      return "#f59e0b";
+    case "Broken":
+      return "#7f1d1d";
+    default:
+      return "#374151";
+  }
+};
+
+const getToolEmoji = (toolName: string) => {
+  const name = toolName.toLowerCase();
+
+  if (name.includes("drill")) return "🛠️";
+  if (name.includes("screwdriver")) return "🪛";
+  if (name.includes("battery")) return "🔋";
+  if (name.includes("ladder")) return "🪜";
+  if (name.includes("tester")) return "📟";
+  if (name.includes("grinder")) return "⚙️";
+  if (name.includes("saw")) return "🪚";
+  if (name.includes("light")) return "💡";
+
+  return "🔧";
+};
+
 export default function WorkerDetailsScreen() {
   const { workerName } = useLocalSearchParams();
 
@@ -22,13 +52,19 @@ export default function WorkerDetailsScreen() {
   const updateTool = useToolStore((state) => state.updateTool);
   const returnTool = useToolStore((state) => state.returnTool);
 
+  const workerNameText = String(workerName || "Unknown worker");
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newQuantity, setNewQuantity] = useState("");
 
-  const workerNameText = String(workerName || "Unknown worker");
-
-  const workerTools = tools.filter(
-    (tool) => tool.borrowedBy === workerName || tool.holder === workerName
+  const workerTools = useMemo(
+    () =>
+      tools.filter(
+        (tool) =>
+          tool.borrowedBy === workerNameText ||
+          tool.holder === workerNameText
+      ),
+    [tools, workerNameText]
   );
 
   const location =
@@ -38,6 +74,14 @@ export default function WorkerDetailsScreen() {
     (sum, tool) => sum + Number(tool.quantity || 0),
     0
   );
+
+  const brokenCount = workerTools.filter(
+    (tool) => tool.status === "Broken"
+  ).length;
+
+  const missingCount = workerTools.filter(
+    (tool) => tool.status === "Missing"
+  ).length;
 
   const exportWorkerPdf = async () => {
     if (workerTools.length === 0) {
@@ -53,6 +97,7 @@ export default function WorkerDetailsScreen() {
             <td>${tool.name}</td>
             <td>${tool.quantity || "0"}</td>
             <td>${tool.status || ""}</td>
+            <td>${tool.location || ""}</td>
           </tr>
         `
       )
@@ -61,24 +106,37 @@ export default function WorkerDetailsScreen() {
     const html = `
       <html>
         <body style="font-family: Arial; padding: 24px;">
-          <h1>MyTools - Worker Tool Report</h1>
+          <h1>MyTools - Worker Report</h1>
+
           <p><strong>Worker:</strong> ${workerNameText}</p>
-          <p><strong>Location / Project:</strong> ${location}</p>
+          <p><strong>Location:</strong> ${location}</p>
           <p><strong>Date:</strong> ${new Date().toLocaleString()}</p>
 
-          <table style="width: 100%; border-collapse: collapse; margin-top: 24px;">
+          <h2>Summary</h2>
+
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr><td><strong>Tool Lines</strong></td><td>${workerTools.length}</td></tr>
+            <tr><td><strong>Total Quantity</strong></td><td>${totalQuantity}</td></tr>
+            <tr><td><strong>Broken</strong></td><td>${brokenCount}</td></tr>
+            <tr><td><strong>Missing</strong></td><td>${missingCount}</td></tr>
+          </table>
+
+          <h2 style="margin-top: 30px;">Assigned Tools</h2>
+
+          <table style="width: 100%; border-collapse: collapse;">
             <tr>
               <th style="border: 1px solid #333; padding: 8px;">#</th>
               <th style="border: 1px solid #333; padding: 8px;">Tool</th>
               <th style="border: 1px solid #333; padding: 8px;">Qty</th>
               <th style="border: 1px solid #333; padding: 8px;">Status</th>
+              <th style="border: 1px solid #333; padding: 8px;">Location</th>
             </tr>
             ${rows}
           </table>
 
-          <div style="margin-top: 60px;">
-            <p><strong>Worker Signature:</strong> __________________________</p>
-            <p><strong>Manager Signature:</strong> _________________________</p>
+          <div style="margin-top: 70px;">
+            <p><strong>Worker Signature:</strong> ______________________</p>
+            <p><strong>Manager Signature:</strong> _____________________</p>
           </div>
         </body>
       </html>
@@ -90,7 +148,7 @@ export default function WorkerDetailsScreen() {
   const handleDelete = (toolId?: string, toolName?: string) => {
     if (!toolId) return;
 
-    Alert.alert("Delete Tool", `Remove ${toolName}?`, [
+    Alert.alert("Delete Tool", `Delete ${toolName}?`, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
@@ -115,7 +173,7 @@ export default function WorkerDetailsScreen() {
 
     Alert.alert(
       "Return All Tools",
-      `Return all tools from ${workerNameText} to warehouse?`,
+      `Return all tools from ${workerNameText}?`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -145,6 +203,18 @@ export default function WorkerDetailsScreen() {
 
     setEditingId(null);
     setNewQuantity("");
+
+    Alert.alert("Saved", "Quantity updated");
+  };
+
+  const openAddTools = () => {
+    router.push({
+      pathname: "/add-tool",
+      params: {
+        workerName: workerNameText,
+        location,
+      },
+    } as any);
   };
 
   return (
@@ -153,117 +223,160 @@ export default function WorkerDetailsScreen() {
 
       <Text style={styles.subtitle}>{location}</Text>
 
-      <View style={styles.summaryCard}>
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryBox}>
-            <Text style={styles.summaryNumber}>{workerTools.length}</Text>
-            <Text style={styles.summaryLabel}>Items</Text>
-          </View>
+      <View style={styles.heroCard}>
+        <Text style={styles.heroTitle}>Worker Overview</Text>
 
-          <View style={styles.summaryBox}>
-            <Text style={styles.summaryNumber}>{totalQuantity}</Text>
-            <Text style={styles.summaryLabel}>Total Qty</Text>
-          </View>
+        <Text style={styles.heroText}>
+          Assigned tools and project status
+        </Text>
+      </View>
+
+      <View style={styles.statsRow}>
+        <View style={styles.statCard}>
+          <Text style={styles.statNumber}>{workerTools.length}</Text>
+          <Text style={styles.statLabel}>Tool Lines</Text>
         </View>
 
-        <View style={styles.mainActions}>
-          <TouchableOpacity style={styles.pdfButton} onPress={exportWorkerPdf}>
-            <Text style={styles.mainActionText}>Export PDF</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.returnAllButton}
-            onPress={handleReturnAll}
-          >
-            <Text style={styles.mainActionText}>Return All</Text>
-          </TouchableOpacity>
+        <View style={styles.statCard}>
+          <Text style={styles.statNumber}>{totalQuantity}</Text>
+          <Text style={styles.statLabel}>Total Qty</Text>
         </View>
       </View>
+
+      <View style={styles.statsRow}>
+        <View style={styles.statCard}>
+          <Text style={styles.problemNumber}>{brokenCount}</Text>
+          <Text style={styles.statLabel}>Broken</Text>
+        </View>
+
+        <View style={styles.statCard}>
+          <Text style={styles.warningNumber}>{missingCount}</Text>
+          <Text style={styles.statLabel}>Missing</Text>
+        </View>
+      </View>
+
+      <View style={styles.mainActions}>
+        <TouchableOpacity style={styles.pdfButton} onPress={exportWorkerPdf}>
+          <Text style={styles.mainButtonText}>Export PDF</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.returnAllButton}
+          onPress={handleReturnAll}
+        >
+          <Text style={styles.mainButtonText}>Return All</Text>
+        </TouchableOpacity>
+      </View>
+
+      <TouchableOpacity style={styles.addToolsButton} onPress={openAddTools}>
+        <Text style={styles.mainButtonText}>+ Add More Tools</Text>
+      </TouchableOpacity>
 
       <Text style={styles.sectionTitle}>Assigned Tools</Text>
 
       {workerTools.length === 0 ? (
-        <Text style={styles.emptyText}>No tools assigned</Text>
+        <Text style={styles.emptyText}>No assigned tools</Text>
       ) : (
-        <View style={styles.listCard}>
-          {workerTools.map((tool, index) => {
-            const realId = tool.id || `old-tool-${index}`;
-            const isEditing = editingId === realId;
+        workerTools.map((tool, index) => {
+          const realId = tool.id || `old-tool-${index}`;
+          const isEditing = editingId === realId;
 
-            return (
-              <View key={realId} style={styles.toolCard}>
-                <View style={styles.toolTopRow}>
-                  <View style={styles.toolInfo}>
+          return (
+            <View key={realId} style={styles.toolCard}>
+              <View style={styles.toolTop}>
+                <View style={styles.leftBox}>
+                  <Text style={styles.toolEmoji}>{getToolEmoji(tool.name)}</Text>
+
+                  <View style={{ flex: 1 }}>
                     <Text style={styles.toolName}>{tool.name}</Text>
 
                     <Text style={styles.toolMeta}>
-                      {tool.category || "General"} · {tool.status || "Unknown"}
+                      {tool.category || "General"} · {tool.brand || "No brand"}
                     </Text>
                   </View>
-
-                  {isEditing ? (
-                    <TextInput
-                      style={styles.quantityInput}
-                      value={newQuantity}
-                      onChangeText={setNewQuantity}
-                      keyboardType="numeric"
-                    />
-                  ) : (
-                    <View style={styles.quantityBadge}>
-                      <Text style={styles.quantityText}>
-                        x{tool.quantity || "0"}
-                      </Text>
-                    </View>
-                  )}
                 </View>
 
+                <View
+                  style={[
+                    styles.statusBadge,
+                    {
+                      backgroundColor: getStatusColor(tool.status),
+                    },
+                  ]}
+                >
+                  <Text style={styles.statusText}>
+                    {tool.status || "Unknown"}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.middleRow}>
+                <Text style={styles.locationText}>
+                  {tool.location || "No location"}
+                </Text>
+
                 {isEditing ? (
-                  <View style={styles.actionRow}>
-                    <TouchableOpacity
-                      style={styles.saveButton}
-                      onPress={() => saveEdit(tool, realId)}
-                    >
-                      <Text style={styles.actionText}>Save</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.cancelButton}
-                      onPress={() => {
-                        setEditingId(null);
-                        setNewQuantity("");
-                      }}
-                    >
-                      <Text style={styles.actionText}>Cancel</Text>
-                    </TouchableOpacity>
-                  </View>
+                  <TextInput
+                    style={styles.quantityInput}
+                    value={newQuantity}
+                    onChangeText={setNewQuantity}
+                    keyboardType="numeric"
+                  />
                 ) : (
-                  <View style={styles.actionRow}>
-                    <TouchableOpacity
-                      style={styles.editButton}
-                      onPress={() => startEdit(realId, tool.quantity || "")}
-                    >
-                      <Text style={styles.actionText}>Edit</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.returnButton}
-                      onPress={() => handleReturn(realId, tool.name)}
-                    >
-                      <Text style={styles.actionText}>Return</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.deleteButton}
-                      onPress={() => handleDelete(realId, tool.name)}
-                    >
-                      <Text style={styles.actionText}>Delete</Text>
-                    </TouchableOpacity>
+                  <View style={styles.quantityBadge}>
+                    <Text style={styles.quantityText}>
+                      x{tool.quantity || "0"}
+                    </Text>
                   </View>
                 )}
               </View>
-            );
-          })}
-        </View>
+
+              {isEditing ? (
+                <View style={styles.actionRow}>
+                  <TouchableOpacity
+                    style={styles.saveButton}
+                    onPress={() => saveEdit(tool, realId)}
+                  >
+                    <Text style={styles.buttonText}>Save</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.cancelButton}
+                    onPress={() => {
+                      setEditingId(null);
+                      setNewQuantity("");
+                    }}
+                  >
+                    <Text style={styles.buttonText}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.actionRow}>
+                  <TouchableOpacity
+                    style={styles.editButton}
+                    onPress={() => startEdit(realId, tool.quantity || "")}
+                  >
+                    <Text style={styles.buttonText}>Edit</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.returnButton}
+                    onPress={() => handleReturn(realId, tool.name)}
+                  >
+                    <Text style={styles.buttonText}>Return</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => handleDelete(realId, tool.name)}
+                  >
+                    <Text style={styles.buttonText}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          );
+        })
       )}
 
       <View style={{ height: 80 }} />
@@ -288,70 +401,101 @@ const styles = StyleSheet.create({
   subtitle: {
     color: "#9ca3af",
     fontSize: 16,
-    marginTop: 4,
     marginBottom: 18,
   },
 
-  summaryCard: {
-    backgroundColor: "#111c34",
+  heroCard: {
+    backgroundColor: "#ff6b00",
     borderRadius: 20,
-    padding: 16,
+    padding: 18,
     marginBottom: 18,
+  },
+
+  heroTitle: {
+    color: "white",
+    fontSize: 24,
+    fontWeight: "bold",
+  },
+
+  heroText: {
+    color: "white",
+    fontSize: 14,
+    marginTop: 4,
+  },
+
+  statsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 10,
+  },
+
+  statCard: {
+    flex: 1,
+    backgroundColor: "#111c34",
+    borderRadius: 16,
+    padding: 16,
     borderWidth: 1,
     borderColor: "#1f2937",
   },
 
-  summaryRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 14,
-  },
-
-  summaryBox: {
-    flex: 1,
-    backgroundColor: "#020b1f",
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#374151",
-  },
-
-  summaryNumber: {
+  statNumber: {
     color: "#ff6b00",
     fontSize: 28,
     fontWeight: "bold",
   },
 
-  summaryLabel: {
+  statLabel: {
     color: "#9ca3af",
-    fontSize: 13,
-    marginTop: 3,
+    fontSize: 12,
+    marginTop: 4,
+  },
+
+  warningNumber: {
+    color: "#fbbf24",
+    fontSize: 28,
+    fontWeight: "bold",
+  },
+
+  problemNumber: {
+    color: "#f87171",
+    fontSize: 28,
+    fontWeight: "bold",
   },
 
   mainActions: {
     flexDirection: "row",
     gap: 10,
+    marginTop: 8,
+    marginBottom: 10,
   },
 
   pdfButton: {
     flex: 1,
-    backgroundColor: "#ff6b00",
-    padding: 13,
-    borderRadius: 13,
+    backgroundColor: "#2563eb",
+    padding: 15,
+    borderRadius: 14,
     alignItems: "center",
   },
 
   returnAllButton: {
     flex: 1,
     backgroundColor: "#16a34a",
-    padding: 13,
-    borderRadius: 13,
+    padding: 15,
+    borderRadius: 14,
     alignItems: "center",
   },
 
-  mainActionText: {
+  addToolsButton: {
+    backgroundColor: "#ff6b00",
+    padding: 15,
+    borderRadius: 14,
+    alignItems: "center",
+    marginBottom: 22,
+  },
+
+  mainButtonText: {
     color: "white",
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "bold",
   },
 
@@ -359,67 +503,96 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 22,
     fontWeight: "bold",
-    marginBottom: 10,
+    marginBottom: 12,
   },
 
-  listCard: {
-    backgroundColor: "#111c34",
-    borderRadius: 20,
-    padding: 12,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "#1f2937",
+  emptyText: {
+    color: "#9ca3af",
+    fontSize: 16,
   },
 
   toolCard: {
-    backgroundColor: "#020b1f",
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 10,
+    backgroundColor: "#111c34",
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: "#1f2937",
   },
 
-  toolTopRow: {
+  toolTop: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
+    alignItems: "center",
   },
 
-  toolInfo: {
+  leftBox: {
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
+    marginRight: 10,
+  },
+
+  toolEmoji: {
+    fontSize: 28,
     marginRight: 10,
   },
 
   toolName: {
     color: "white",
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "bold",
   },
 
   toolMeta: {
     color: "#9ca3af",
     fontSize: 12,
-    marginTop: 3,
+    marginTop: 4,
+  },
+
+  middleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 14,
+  },
+
+  locationText: {
+    color: "#d1d5db",
+    fontSize: 13,
+    flex: 1,
+    marginRight: 10,
+  },
+
+  statusBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+
+  statusText: {
+    color: "white",
+    fontSize: 11,
+    fontWeight: "bold",
   },
 
   quantityBadge: {
-    backgroundColor: "#111c34",
+    backgroundColor: "#020b1f",
     borderRadius: 999,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderWidth: 1,
     borderColor: "#374151",
   },
 
   quantityText: {
     color: "#ff6b00",
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "bold",
   },
 
   quantityInput: {
-    backgroundColor: "#111c34",
+    backgroundColor: "#020b1f",
     color: "white",
     width: 74,
     padding: 9,
@@ -433,57 +606,52 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: "row",
     gap: 8,
-    marginTop: 10,
+    marginTop: 14,
   },
 
   editButton: {
     flex: 1,
     backgroundColor: "#2563eb",
-    paddingVertical: 9,
-    borderRadius: 11,
+    paddingVertical: 10,
+    borderRadius: 12,
     alignItems: "center",
   },
 
   returnButton: {
     flex: 1,
     backgroundColor: "#16a34a",
-    paddingVertical: 9,
-    borderRadius: 11,
+    paddingVertical: 10,
+    borderRadius: 12,
     alignItems: "center",
   },
 
   deleteButton: {
     flex: 1,
     backgroundColor: "#7f1d1d",
-    paddingVertical: 9,
-    borderRadius: 11,
+    paddingVertical: 10,
+    borderRadius: 12,
     alignItems: "center",
   },
 
   saveButton: {
     flex: 1,
     backgroundColor: "#16a34a",
-    paddingVertical: 9,
-    borderRadius: 11,
+    paddingVertical: 10,
+    borderRadius: 12,
     alignItems: "center",
   },
 
   cancelButton: {
     flex: 1,
     backgroundColor: "#374151",
-    paddingVertical: 9,
-    borderRadius: 11,
+    paddingVertical: 10,
+    borderRadius: 12,
     alignItems: "center",
   },
 
-  actionText: {
+  buttonText: {
     color: "white",
     fontSize: 13,
     fontWeight: "bold",
-  },
-
-  emptyText: {
-    color: "#9ca3af",
-    fontSize: 16,
   },
 });

@@ -1,5 +1,5 @@
-import { router } from "expo-router";
-import React, { useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useEffect, useState } from "react";
 
 import {
   Alert,
@@ -91,16 +91,29 @@ const getToolIcon = (toolName: string) => {
 };
 
 export default function AddToolScreen() {
+  const params = useLocalSearchParams();
+
+  const prefillWorkerName = String(params.workerName || "");
+  const prefillLocation = String(params.location || "");
+
   const addTool = useToolStore((state) => state.addTool);
   const tools = useToolStore((state) => state.tools || []);
   const warehouseStock = useToolStore((state) => state.warehouseStock || {});
 
-  const [workerName, setWorkerName] = useState("");
-  const [profession, setProfession] = useState(
-    professions[0] || "Electrician"
-  );
-  const [location, setLocation] = useState("");
+  const [workerName, setWorkerName] = useState(prefillWorkerName);
+  const [profession, setProfession] = useState(professions[0] || "Electrician");
+  const [location, setLocation] = useState(prefillLocation);
   const [selectedTools, setSelectedTools] = useState<SelectedTools>({});
+
+  useEffect(() => {
+    if (prefillWorkerName) {
+      setWorkerName(prefillWorkerName);
+    }
+
+    if (prefillLocation) {
+      setLocation(prefillLocation);
+    }
+  }, [prefillWorkerName, prefillLocation]);
 
   const currentCatalog =
     toolCatalog[profession as keyof typeof toolCatalog] || {};
@@ -123,6 +136,7 @@ export default function AddToolScreen() {
   const getAvailableQuantity = (toolName: string) => {
     const total = Number(warehouseStock[toolName] || 0);
     const assigned = getAssignedQuantity(toolName);
+
     return total - assigned;
   };
 
@@ -170,10 +184,7 @@ export default function AddToolScreen() {
         const available = getAvailableQuantity(toolName);
 
         if (available <= 0) {
-          Alert.alert(
-            "No stock available",
-            `${toolName} has no available stock.`
-          );
+          Alert.alert("No stock available", `${toolName} has no available stock.`);
           return;
         }
 
@@ -212,7 +223,16 @@ export default function AddToolScreen() {
         : `${toolsToSave.length} tools added to inventory`
     );
 
-    router.replace(assignedWorker ? "/borrowed" : "/(tabs)");
+    if (assignedWorker) {
+      router.replace({
+        pathname: "/worker-details",
+        params: {
+          workerName: assignedWorker,
+        },
+      } as any);
+    } else {
+      router.replace("/(tabs)");
+    }
   };
 
   const renderOptions = (
@@ -247,7 +267,15 @@ export default function AddToolScreen() {
     <ScrollView style={styles.container}>
       <Text style={styles.title}>Add / Assign Tools</Text>
 
+      {prefillWorkerName ? (
+        <View style={styles.workerNotice}>
+          <Text style={styles.workerNoticeTitle}>Adding tools to</Text>
+          <Text style={styles.workerNoticeName}>{prefillWorkerName}</Text>
+        </View>
+      ) : null}
+
       <Text style={styles.label}>Worker Name</Text>
+
       <TextInput
         placeholder="e.g. Ali, Mehmet, Team A"
         placeholderTextColor="#888"
@@ -257,6 +285,7 @@ export default function AddToolScreen() {
       />
 
       <Text style={styles.label}>Location / Project</Text>
+
       <TextInput
         placeholder="e.g. Site A, Van 1, Warehouse"
         placeholderTextColor="#888"
@@ -266,6 +295,7 @@ export default function AddToolScreen() {
       />
 
       <Text style={styles.label}>Profession</Text>
+
       {renderOptions(professions, profession, selectProfession)}
 
       <Text style={styles.label}>Tools & Quantity</Text>
@@ -326,10 +356,23 @@ export default function AddToolScreen() {
 
       <TouchableOpacity
         style={styles.backButton}
-        onPress={() => router.replace("/(tabs)")}
+        onPress={() => {
+          if (prefillWorkerName) {
+            router.replace({
+              pathname: "/worker-details",
+              params: {
+                workerName: prefillWorkerName,
+              },
+            } as any);
+          } else {
+            router.replace("/(tabs)");
+          }
+        }}
       >
         <Text style={styles.backButtonText}>Back</Text>
       </TouchableOpacity>
+
+      <View style={{ height: 70 }} />
     </ScrollView>
   );
 }
@@ -346,7 +389,28 @@ const styles = StyleSheet.create({
     fontSize: 38,
     fontWeight: "bold",
     marginTop: 60,
-    marginBottom: 28,
+    marginBottom: 22,
+  },
+
+  workerNotice: {
+    backgroundColor: "#111c34",
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: "#1f2937",
+  },
+
+  workerNoticeTitle: {
+    color: "#9ca3af",
+    fontSize: 14,
+    marginBottom: 4,
+  },
+
+  workerNoticeName: {
+    color: "#ff6b00",
+    fontSize: 24,
+    fontWeight: "bold",
   },
 
   label: {
