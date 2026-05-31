@@ -12,6 +12,7 @@ import {
 } from "react-native";
 
 import { useToolStore } from "../toolStore";
+import { supabase } from "./supabase";
 import toolCatalog from "./toolCatalog";
 
 const professions = Object.keys(toolCatalog || {});
@@ -104,6 +105,7 @@ export default function AddToolScreen() {
   const [profession, setProfession] = useState(professions[0] || "Electrician");
   const [location, setLocation] = useState(prefillLocation);
   const [selectedTools, setSelectedTools] = useState<SelectedTools>({});
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (prefillWorkerName) {
@@ -166,7 +168,9 @@ export default function AddToolScreen() {
     return "General";
   };
 
-  const saveTools = () => {
+  const saveTools = async () => {
+    if (saving) return;
+
     const assignedWorker = workerName.trim();
 
     const toolsToSave = Object.entries(selectedTools).filter(
@@ -184,7 +188,10 @@ export default function AddToolScreen() {
         const available = getAvailableQuantity(toolName);
 
         if (available <= 0) {
-          Alert.alert("No stock available", `${toolName} has no available stock.`);
+          Alert.alert(
+            "No stock available",
+            `${toolName} has no available stock.`
+          );
           return;
         }
 
@@ -198,8 +205,21 @@ export default function AddToolScreen() {
       }
     }
 
-    toolsToSave.forEach(([toolName, quantity]) => {
-      addTool({
+    try {
+      setSaving(true);
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError) {
+        Alert.alert("Supabase Error", userError.message);
+        setSaving(false);
+        return;
+      }
+
+      const localTools = toolsToSave.map(([toolName, quantity]) => ({
         id: `${Date.now()}-${toolName}-${Math.random()}`,
         name: toolName,
         profession,
@@ -213,25 +233,62 @@ export default function AddToolScreen() {
         returnDate: "",
         notes: "",
         image: getAutoImage(toolName),
+      }));
+
+      localTools.forEach((tool) => {
+        addTool(tool);
       });
-    });
 
-    Alert.alert(
-      "Success",
-      assignedWorker
-        ? `${toolsToSave.length} tools assigned to ${assignedWorker}`
-        : `${toolsToSave.length} tools added to inventory`
-    );
+      if (user) {
+        const cloudTools = localTools.map((tool) => ({
+          user_id: user.id,
+          name: tool.name,
+          profession: tool.profession,
+          category: tool.category,
+          brand: tool.brand,
+          quantity: tool.quantity,
+          location: tool.location,
+          holder: tool.holder,
+          status: tool.status,
+          borrowed_by: tool.borrowedBy,
+          return_date: tool.returnDate,
+          notes: tool.notes,
+          image: tool.image,
+        }));
 
-    if (assignedWorker) {
-      router.replace({
-        pathname: "/worker-details",
-        params: {
-          workerName: assignedWorker,
-        },
-      } as any);
-    } else {
-      router.replace("/(tabs)");
+        const { error: insertError } = await supabase
+          .from("tools")
+          .insert(cloudTools);
+
+        if (insertError) {
+          Alert.alert(
+            "Cloud Save Warning",
+            `Saved locally, but cloud save failed: ${insertError.message}`
+          );
+        }
+      }
+
+      Alert.alert(
+        "Success",
+        assignedWorker
+          ? `${toolsToSave.length} tools assigned to ${assignedWorker}`
+          : `${toolsToSave.length} tools added to inventory`
+      );
+
+      if (assignedWorker) {
+        router.replace({
+          pathname: "/worker-details",
+          params: {
+            workerName: assignedWorker,
+          },
+        } as any);
+      } else {
+        router.replace("/(tabs)");
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to save tools");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -350,8 +407,14 @@ export default function AddToolScreen() {
         );
       })}
 
-      <TouchableOpacity style={styles.button} onPress={saveTools}>
-        <Text style={styles.buttonText}>Save Selected Tools</Text>
+      <TouchableOpacity
+        style={[styles.button, saving && styles.disabledButton]}
+        onPress={saveTools}
+        disabled={saving}
+      >
+        <Text style={styles.buttonText}>
+          {saving ? "Saving..." : "Save Selected Tools"}
+        </Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -540,6 +603,10 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: "center",
     marginTop: 20,
+  },
+
+  disabledButton: {
+    opacity: 0.6,
   },
 
   buttonText: {

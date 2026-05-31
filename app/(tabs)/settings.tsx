@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as DocumentPicker from "expo-document-picker";
+import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 
 import {
@@ -123,7 +124,10 @@ export default function SettingsScreen() {
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.title}>Settings</Text>
-      <Text style={styles.subtitle}>App preferences and data control</Text>
+
+      <Text style={styles.subtitle}>
+        App preferences and data control
+      </Text>
 
       <View style={styles.card}>
         <Text style={styles.label}>Company Name</Text>
@@ -145,6 +149,7 @@ export default function SettingsScreen() {
         <View style={styles.switchRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.label}>Dark Mode</Text>
+
             <Text style={styles.hint}>
               Saved for the future theme system
             </Text>
@@ -152,6 +157,21 @@ export default function SettingsScreen() {
 
           <Switch value={darkMode} onValueChange={setDarkMode} />
         </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.label}>Account</Text>
+
+        <Text style={styles.hint}>
+          Login and sync your data with Supabase cloud.
+        </Text>
+
+        <TouchableOpacity
+          style={styles.loginButton}
+          onPress={() => router.push("/login")}
+        >
+          <Text style={styles.buttonText}>Login / Register</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.card}>
@@ -252,6 +272,14 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     alignItems: "center",
     marginTop: 14,
+  },
+
+  loginButton: {
+    backgroundColor: "#7c3aed",
+    padding: 14,
+    borderRadius: 13,
+    alignItems: "center",
+    marginTop: 4,
   },
 
   exportButton: {
