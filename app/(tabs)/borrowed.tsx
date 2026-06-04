@@ -12,13 +12,13 @@ import {
 } from "react-native";
 
 import { useToolStore } from "../../toolStore";
+import { cloudReturnTool } from "../cloudSync";
 
 export default function BorrowedScreen() {
   const tools = useToolStore((state) => state.tools || []);
   const deleteTool = useToolStore((state) => state.deleteTool);
-  const duplicateWorkerGroup = useToolStore(
-    (state) => state.duplicateWorkerGroup
-  );
+  const returnTool = useToolStore((state) => state.returnTool);
+  const duplicateWorkerGroup = useToolStore((state) => state.duplicateWorkerGroup);
 
   const [copyingWorker, setCopyingWorker] = useState<string | null>(null);
   const [newWorkerName, setNewWorkerName] = useState("");
@@ -30,39 +30,44 @@ export default function BorrowedScreen() {
 
   const groupedByWorker = borrowedTools.reduce((acc, tool) => {
     const workerName = tool.borrowedBy || tool.holder || "Unknown Worker";
-
-    if (!acc[workerName]) {
-      acc[workerName] = [];
-    }
-
+    if (!acc[workerName]) acc[workerName] = [];
     acc[workerName].push(tool);
-
     return acc;
   }, {} as Record<string, typeof borrowedTools>);
 
-  const getWorkerLocation = (workerTools: typeof borrowedTools) => {
-    return workerTools.find((tool) => tool.location)?.location || "No location";
-  };
+  const getWorkerLocation = (workerTools: typeof borrowedTools) =>
+    workerTools.find((tool) => tool.location)?.location || "No location";
 
-  const getTotalQuantity = (workerTools: typeof borrowedTools) => {
-    return workerTools.reduce(
-      (sum, tool) => sum + Number(tool.quantity || 0),
-      0
+  const getTotalQuantity = (workerTools: typeof borrowedTools) =>
+    workerTools.reduce((sum, tool) => sum + Number(tool.quantity || 0), 0);
+
+  const getBrokenCount = (workerTools: typeof borrowedTools) =>
+    workerTools.filter((tool) => tool.status === "Broken").length;
+
+  const getMissingCount = (workerTools: typeof borrowedTools) =>
+    workerTools.filter((tool) => tool.status === "Missing").length;
+
+  const handleReturnAll = (workerName: string, workerTools: typeof borrowedTools) => {
+    Alert.alert(
+      "Return All Tools",
+      `Return all tools from ${workerName} to warehouse?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Return All",
+          onPress: async () => {
+            for (const [index, tool] of workerTools.entries()) {
+              const realId = tool.id || `old-tool-${index}`;
+              returnTool(realId);
+              await cloudReturnTool(realId);
+            }
+          },
+        },
+      ]
     );
   };
 
-  const getBrokenCount = (workerTools: typeof borrowedTools) => {
-    return workerTools.filter((tool) => tool.status === "Broken").length;
-  };
-
-  const getMissingCount = (workerTools: typeof borrowedTools) => {
-    return workerTools.filter((tool) => tool.status === "Missing").length;
-  };
-
-  const deleteWorkerGroup = (
-    workerName: string,
-    workerTools: typeof borrowedTools
-  ) => {
+  const deleteWorkerGroup = (workerName: string, workerTools: typeof borrowedTools) => {
     Alert.alert(
       "Delete Worker Group",
       `Delete ${workerName} and all assigned tools?`,
@@ -87,43 +92,29 @@ export default function BorrowedScreen() {
       Alert.alert("Error", "Enter worker name");
       return;
     }
-
-    duplicateWorkerGroup(
-      workerName,
-      newWorkerName.trim(),
-      newLocation.trim()
-    );
-
+    duplicateWorkerGroup(workerName, newWorkerName.trim(), newLocation.trim());
     setCopyingWorker(null);
     setNewWorkerName("");
     setNewLocation("");
-
     Alert.alert("Success", "Worker group copied");
   };
 
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.title}>Workers</Text>
-
       <Text style={styles.subtitle}>Active worker assignments</Text>
 
       <View style={styles.summaryCard}>
         <View style={styles.summaryBox}>
-          <Text style={styles.summaryNumber}>
-            {Object.keys(groupedByWorker).length}
-          </Text>
+          <Text style={styles.summaryNumber}>{Object.keys(groupedByWorker).length}</Text>
           <Text style={styles.summaryLabel}>Workers</Text>
         </View>
-
         <View style={styles.summaryBox}>
           <Text style={styles.summaryNumber}>{borrowedTools.length}</Text>
           <Text style={styles.summaryLabel}>Tool Lines</Text>
         </View>
-
         <View style={styles.summaryBox}>
-          <Text style={styles.summaryNumber}>
-            {getTotalQuantity(borrowedTools)}
-          </Text>
+          <Text style={styles.summaryNumber}>{getTotalQuantity(borrowedTools)}</Text>
           <Text style={styles.summaryLabel}>Total Qty</Text>
         </View>
       </View>
@@ -151,12 +142,8 @@ export default function BorrowedScreen() {
                 <View style={styles.topRow}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.workerName}>{workerName}</Text>
-
-                    <Text style={styles.locationText}>
-                      Project / Location: {location}
-                    </Text>
+                    <Text style={styles.locationText}>📍 {location}</Text>
                   </View>
-
                   <View style={styles.badge}>
                     <Text style={styles.badgeText}>OPEN</Text>
                   </View>
@@ -164,22 +151,17 @@ export default function BorrowedScreen() {
 
                 <View style={styles.statsRow}>
                   <View style={styles.smallStat}>
-                    <Text style={styles.smallStatNumber}>
-                      {workerTools.length}
-                    </Text>
+                    <Text style={styles.smallStatNumber}>{workerTools.length}</Text>
                     <Text style={styles.smallStatLabel}>Lines</Text>
                   </View>
-
                   <View style={styles.smallStat}>
                     <Text style={styles.smallStatNumber}>{totalQuantity}</Text>
                     <Text style={styles.smallStatLabel}>Qty</Text>
                   </View>
-
                   <View style={styles.smallStat}>
                     <Text style={styles.problemNumber}>{brokenCount}</Text>
                     <Text style={styles.smallStatLabel}>Broken</Text>
                   </View>
-
                   <View style={styles.smallStat}>
                     <Text style={styles.warningNumber}>{missingCount}</Text>
                     <Text style={styles.smallStatLabel}>Missing</Text>
@@ -187,14 +169,9 @@ export default function BorrowedScreen() {
                 </View>
 
                 <Text style={styles.previewText}>
-                  {workerTools
-                    .slice(0, 3)
-                    .map((tool) => `${tool.quantity || "0"}x ${tool.name}`)
-                    .join(" · ")}
+                  {workerTools.slice(0, 3).map((tool) => `${tool.quantity || "0"}x ${tool.name}`).join(" · ")}
                   {workerTools.length > 3 ? " · ..." : ""}
                 </Text>
-
-                <Text style={styles.openText}>Tap to open worker details</Text>
               </TouchableOpacity>
 
               {copyingWorker === workerName ? (
@@ -206,7 +183,6 @@ export default function BorrowedScreen() {
                     value={newWorkerName}
                     onChangeText={setNewWorkerName}
                   />
-
                   <TextInput
                     placeholder="New location / project"
                     placeholderTextColor="#888"
@@ -214,23 +190,11 @@ export default function BorrowedScreen() {
                     value={newLocation}
                     onChangeText={setNewLocation}
                   />
-
-                  <View style={styles.copyButtons}>
-                    <TouchableOpacity
-                      style={styles.saveButton}
-                      onPress={() => copyGroup(workerName)}
-                    >
+                  <View style={styles.actionRow}>
+                    <TouchableOpacity style={styles.saveButton} onPress={() => copyGroup(workerName)}>
                       <Text style={styles.buttonText}>Save Copy</Text>
                     </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.cancelButton}
-                      onPress={() => {
-                        setCopyingWorker(null);
-                        setNewWorkerName("");
-                        setNewLocation("");
-                      }}
-                    >
+                    <TouchableOpacity style={styles.cancelButton} onPress={() => { setCopyingWorker(null); setNewWorkerName(""); setNewLocation(""); }}>
                       <Text style={styles.buttonText}>Cancel</Text>
                     </TouchableOpacity>
                   </View>
@@ -238,17 +202,24 @@ export default function BorrowedScreen() {
               ) : (
                 <View style={styles.actionRow}>
                   <TouchableOpacity
+                    style={styles.returnAllButton}
+                    onPress={() => handleReturnAll(workerName, workerTools)}
+                  >
+                    <Text style={styles.buttonText}>↩️ Return All</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
                     style={styles.copyButton}
                     onPress={() => setCopyingWorker(workerName)}
                   >
-                    <Text style={styles.buttonText}>Copy Group</Text>
+                    <Text style={styles.buttonText}>Copy</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     style={styles.deleteButton}
                     onPress={() => deleteWorkerGroup(workerName, workerTools)}
                   >
-                    <Text style={styles.buttonText}>Delete Group</Text>
+                    <Text style={styles.buttonText}>Delete</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -263,216 +234,34 @@ export default function BorrowedScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#020b1f",
-    padding: 16,
-  },
-
-  title: {
-    color: "white",
-    fontSize: 40,
-    fontWeight: "bold",
-    marginTop: 54,
-  },
-
-  subtitle: {
-    color: "#9ca3af",
-    fontSize: 16,
-    marginBottom: 18,
-  },
-
-  summaryCard: {
-    backgroundColor: "#111c34",
-    borderRadius: 18,
-    padding: 14,
-    marginBottom: 16,
-    flexDirection: "row",
-    gap: 8,
-    borderWidth: 1,
-    borderColor: "#1f2937",
-  },
-
-  summaryBox: {
-    flex: 1,
-    backgroundColor: "#020b1f",
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#374151",
-  },
-
-  summaryNumber: {
-    color: "#ff6b00",
-    fontSize: 24,
-    fontWeight: "bold",
-  },
-
-  summaryLabel: {
-    color: "#9ca3af",
-    fontSize: 11,
-    marginTop: 3,
-  },
-
-  emptyText: {
-    color: "#9ca3af",
-    fontSize: 16,
-    marginTop: 30,
-  },
-
-  workerCard: {
-    backgroundColor: "#111c34",
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: "#1f2937",
-  },
-
-  topRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
-  workerName: {
-    color: "#ff6b00",
-    fontSize: 24,
-    fontWeight: "bold",
-  },
-
-  locationText: {
-    color: "#d1d5db",
-    fontSize: 13,
-    marginTop: 4,
-  },
-
-  badge: {
-    backgroundColor: "#1e293b",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginLeft: 10,
-  },
-
-  badgeText: {
-    color: "#60a5fa",
-    fontSize: 11,
-    fontWeight: "bold",
-  },
-
-  statsRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 14,
-  },
-
-  smallStat: {
-    flex: 1,
-    backgroundColor: "#020b1f",
-    borderRadius: 12,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: "#1f2937",
-  },
-
-  smallStatNumber: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-
-  smallStatLabel: {
-    color: "#9ca3af",
-    fontSize: 11,
-    marginTop: 3,
-  },
-
-  problemNumber: {
-    color: "#f87171",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-
-  warningNumber: {
-    color: "#fbbf24",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-
-  previewText: {
-    color: "#d1d5db",
-    fontSize: 13,
-    marginTop: 14,
-  },
-
-  openText: {
-    color: "#9ca3af",
-    fontSize: 13,
-    marginTop: 8,
-  },
-
-  actionRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 14,
-  },
-
-  copyButton: {
-    flex: 1,
-    backgroundColor: "#2563eb",
-    paddingVertical: 11,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-
-  deleteButton: {
-    flex: 1,
-    backgroundColor: "#7f1d1d",
-    paddingVertical: 11,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-
-  copyBox: {
-    marginTop: 14,
-  },
-
-  input: {
-    backgroundColor: "#020b1f",
-    color: "white",
-    padding: 14,
-    borderRadius: 12,
-    fontSize: 15,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: "#374151",
-  },
-
-  copyButtons: {
-    flexDirection: "row",
-    gap: 10,
-  },
-
-  saveButton: {
-    flex: 1,
-    backgroundColor: "#16a34a",
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-
-  cancelButton: {
-    flex: 1,
-    backgroundColor: "#374151",
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-
-  buttonText: {
-    color: "white",
-    fontSize: 14,
-    fontWeight: "bold",
-  },
+  container: { flex: 1, backgroundColor: "#020b1f", padding: 16 },
+  title: { color: "white", fontSize: 40, fontWeight: "bold", marginTop: 54 },
+  subtitle: { color: "#9ca3af", fontSize: 16, marginBottom: 18 },
+  summaryCard: { backgroundColor: "#111c34", borderRadius: 18, padding: 14, marginBottom: 16, flexDirection: "row", gap: 8, borderWidth: 1, borderColor: "#1f2937" },
+  summaryBox: { flex: 1, backgroundColor: "#020b1f", borderRadius: 14, padding: 12, borderWidth: 1, borderColor: "#374151" },
+  summaryNumber: { color: "#ff6b00", fontSize: 24, fontWeight: "bold" },
+  summaryLabel: { color: "#9ca3af", fontSize: 11, marginTop: 3 },
+  emptyText: { color: "#9ca3af", fontSize: 16, marginTop: 30 },
+  workerCard: { backgroundColor: "#111c34", borderRadius: 20, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: "#1f2937" },
+  topRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  workerName: { color: "#ff6b00", fontSize: 24, fontWeight: "bold" },
+  locationText: { color: "#d1d5db", fontSize: 13, marginTop: 4 },
+  badge: { backgroundColor: "#1e293b", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6, marginLeft: 10 },
+  badgeText: { color: "#60a5fa", fontSize: 11, fontWeight: "bold" },
+  statsRow: { flexDirection: "row", gap: 8, marginTop: 14 },
+  smallStat: { flex: 1, backgroundColor: "#020b1f", borderRadius: 12, padding: 10, borderWidth: 1, borderColor: "#1f2937" },
+  smallStatNumber: { color: "white", fontSize: 18, fontWeight: "bold" },
+  smallStatLabel: { color: "#9ca3af", fontSize: 11, marginTop: 3 },
+  problemNumber: { color: "#f87171", fontSize: 18, fontWeight: "bold" },
+  warningNumber: { color: "#fbbf24", fontSize: 18, fontWeight: "bold" },
+  previewText: { color: "#d1d5db", fontSize: 13, marginTop: 14, marginBottom: 4 },
+  actionRow: { flexDirection: "row", gap: 8, marginTop: 14 },
+  returnAllButton: { flex: 2, backgroundColor: "#16a34a", paddingVertical: 12, borderRadius: 12, alignItems: "center" },
+  copyButton: { flex: 1, backgroundColor: "#2563eb", paddingVertical: 12, borderRadius: 12, alignItems: "center" },
+  deleteButton: { flex: 1, backgroundColor: "#7f1d1d", paddingVertical: 12, borderRadius: 12, alignItems: "center" },
+  copyBox: { marginTop: 14 },
+  input: { backgroundColor: "#020b1f", color: "white", padding: 14, borderRadius: 12, fontSize: 15, marginBottom: 10, borderWidth: 1, borderColor: "#374151" },
+  saveButton: { flex: 1, backgroundColor: "#16a34a", paddingVertical: 12, borderRadius: 12, alignItems: "center" },
+  cancelButton: { flex: 1, backgroundColor: "#374151", paddingVertical: 12, borderRadius: 12, alignItems: "center" },
+  buttonText: { color: "white", fontSize: 14, fontWeight: "bold" },
 });
