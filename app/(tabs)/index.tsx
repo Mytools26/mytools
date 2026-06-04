@@ -17,7 +17,7 @@ import {
 } from "react-native";
 
 import { useToolStore } from "../../toolStore";
-import { cloudDeleteTool, cloudUpdateToolQuantity } from "../cloudSync";
+import { cloudDeleteTool, cloudUpdateToolQuantity, cloudUpdateToolStatus } from "../cloudSync";
 import { supabase } from "../supabase";
 
 const getToolIcon = (image?: string) => {
@@ -200,10 +200,7 @@ export default function InventoryScreen() {
       </ScrollView>
 
       <Modal visible={!!selectedTool} transparent animationType="slide">
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={{ flex: 1 }}
-        >
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <View style={styles.modalOverlay}>
               <TouchableWithoutFeedback>
@@ -229,11 +226,12 @@ export default function InventoryScreen() {
                       <TouchableOpacity
                         key={status}
                         style={[styles.statusButton, selectedTool?.status === status && styles.statusButtonActive]}
-                        onPress={() => {
+                        onPress={async () => {
                           if (!selectedTool || !selectedToolId) return;
                           const updatedTool = { ...selectedTool, id: selectedToolId, status };
                           updateTool(selectedToolId, updatedTool);
                           setSelectedTool(updatedTool);
+                          await cloudUpdateToolStatus(selectedToolId, status);
                         }}
                       >
                         <Text style={styles.statusButtonText}>{status}</Text>

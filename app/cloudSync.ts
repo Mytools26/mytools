@@ -45,4 +45,11 @@ export const cloudUpdateToolQuantity = async (id: string, quantity: string) => {
     .eq("id", id);
 
   if (error) console.error("cloudUpdateToolQuantity error:", error.message);
+};export const cloudUpdateToolStatus = async (id: string, status: string) => {
+  if (!isUuid(id)) return;
+  const { error } = await supabase
+    .from("tools")
+    .update({ status })
+    .eq("id", id);
+  if (error) console.error("cloudUpdateToolStatus error:", error.message);
 };
