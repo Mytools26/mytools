@@ -15,6 +15,8 @@ import {
   View,
 } from "react-native";
 
+import { supabase } from "../supabase";
+
 const SETTINGS_KEY = "my-tools-settings";
 const STORAGE_KEY = "my-tools-storage";
 
@@ -28,7 +30,6 @@ export default function SettingsScreen() {
 
   const loadSettings = async () => {
     const saved = await AsyncStorage.getItem(SETTINGS_KEY);
-
     if (saved) {
       const parsed = JSON.parse(saved);
       setCompanyName(parsed.companyName || "MyTools Company");
@@ -39,19 +40,28 @@ export default function SettingsScreen() {
   const saveSettings = async () => {
     await AsyncStorage.setItem(
       SETTINGS_KEY,
-      JSON.stringify({
-        companyName,
-        darkMode,
-      })
+      JSON.stringify({ companyName, darkMode })
     );
-
     Alert.alert("Saved", "Settings saved successfully.");
+  };
+
+  const handleLogout = async () => {
+    Alert.alert("Logout", "Are you sure you want to logout?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Logout",
+        style: "destructive",
+        onPress: async () => {
+          await supabase.auth.signOut();
+          router.replace("/login");
+        },
+      },
+    ]);
   };
 
   const exportBackup = async () => {
     const appData = await AsyncStorage.getItem(STORAGE_KEY);
     const settingsData = await AsyncStorage.getItem(SETTINGS_KEY);
-
     const backup = {
       app: "MyTools",
       version: "1.0",
@@ -59,7 +69,6 @@ export default function SettingsScreen() {
       settings: settingsData ? JSON.parse(settingsData) : null,
       storage: appData ? JSON.parse(appData) : null,
     };
-
     await Share.share({
       title: "MyTools Backup",
       message: JSON.stringify(backup, null, 2),
@@ -72,31 +81,17 @@ export default function SettingsScreen() {
         type: "application/json",
         copyToCacheDirectory: true,
       });
-
-      if (result.canceled) {
-        return;
-      }
-
+      if (result.canceled) return;
       const file = result.assets[0];
-
       const response = await fetch(file.uri);
       const text = await response.text();
       const parsed = JSON.parse(text);
-
       if (parsed.settings) {
-        await AsyncStorage.setItem(
-          SETTINGS_KEY,
-          JSON.stringify(parsed.settings)
-        );
+        await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(parsed.settings));
       }
-
       if (parsed.storage) {
-        await AsyncStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify(parsed.storage)
-        );
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(parsed.storage));
       }
-
       Alert.alert("Import Complete", "Backup restored. Restart Expo.");
     } catch (error) {
       Alert.alert("Import Failed", "Invalid backup file.");
@@ -124,14 +119,10 @@ export default function SettingsScreen() {
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.title}>Settings</Text>
-
-      <Text style={styles.subtitle}>
-        App preferences and data control
-      </Text>
+      <Text style={styles.subtitle}>App preferences and data control</Text>
 
       <View style={styles.card}>
         <Text style={styles.label}>Company Name</Text>
-
         <TextInput
           style={styles.input}
           value={companyName}
@@ -139,7 +130,6 @@ export default function SettingsScreen() {
           placeholder="Company name"
           placeholderTextColor="#888"
         />
-
         <TouchableOpacity style={styles.saveButton} onPress={saveSettings}>
           <Text style={styles.buttonText}>Save Settings</Text>
         </TouchableOpacity>
@@ -149,42 +139,30 @@ export default function SettingsScreen() {
         <View style={styles.switchRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.label}>Dark Mode</Text>
-
-            <Text style={styles.hint}>
-              Saved for the future theme system
-            </Text>
+            <Text style={styles.hint}>Saved for the future theme system</Text>
           </View>
-
           <Switch value={darkMode} onValueChange={setDarkMode} />
         </View>
       </View>
 
       <View style={styles.card}>
         <Text style={styles.label}>Account</Text>
-
         <Text style={styles.hint}>
-          Login and sync your data with Supabase cloud.
+          You are logged in. Tap below to sign out.
         </Text>
-
-        <TouchableOpacity
-          style={styles.loginButton}
-          onPress={() => router.push("/login")}
-        >
-          <Text style={styles.buttonText}>Login / Register</Text>
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <Text style={styles.buttonText}>Logout</Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.card}>
         <Text style={styles.label}>Backup</Text>
-
         <Text style={styles.hint}>
           Export or import tools, workers, warehouse stock and history.
         </Text>
-
         <TouchableOpacity style={styles.exportButton} onPress={exportBackup}>
           <Text style={styles.buttonText}>Export Backup</Text>
         </TouchableOpacity>
-
         <TouchableOpacity style={styles.importButton} onPress={importBackup}>
           <Text style={styles.buttonText}>Import Backup</Text>
         </TouchableOpacity>
@@ -192,11 +170,9 @@ export default function SettingsScreen() {
 
       <View style={styles.dangerCard}>
         <Text style={styles.dangerTitle}>Danger Zone</Text>
-
         <Text style={styles.dangerText}>
           Reset deletes all local app data from this device.
         </Text>
-
         <TouchableOpacity style={styles.resetButton} onPress={resetApp}>
           <Text style={styles.buttonText}>Reset Application</Text>
         </TouchableOpacity>
@@ -213,20 +189,17 @@ const styles = StyleSheet.create({
     backgroundColor: "#020b1f",
     padding: 16,
   },
-
   title: {
     color: "white",
     fontSize: 40,
     fontWeight: "bold",
     marginTop: 54,
   },
-
   subtitle: {
     color: "#9ca3af",
     fontSize: 16,
     marginBottom: 18,
   },
-
   card: {
     backgroundColor: "#111c34",
     borderRadius: 18,
@@ -235,21 +208,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#1f2937",
   },
-
   label: {
     color: "white",
     fontSize: 18,
     fontWeight: "bold",
     marginBottom: 10,
   },
-
   hint: {
     color: "#9ca3af",
     fontSize: 13,
     lineHeight: 18,
     marginBottom: 12,
   },
-
   input: {
     backgroundColor: "#020b1f",
     borderRadius: 12,
@@ -259,13 +229,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#374151",
   },
-
   switchRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-
   saveButton: {
     backgroundColor: "#ff6b00",
     padding: 14,
@@ -273,15 +241,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 14,
   },
-
-  loginButton: {
-    backgroundColor: "#7c3aed",
+  logoutButton: {
+    backgroundColor: "#7f1d1d",
     padding: 14,
     borderRadius: 13,
     alignItems: "center",
     marginTop: 4,
   },
-
   exportButton: {
     backgroundColor: "#2563eb",
     padding: 14,
@@ -289,7 +255,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 4,
   },
-
   importButton: {
     backgroundColor: "#16a34a",
     padding: 14,
@@ -297,7 +262,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 10,
   },
-
   dangerCard: {
     backgroundColor: "#111c34",
     borderRadius: 18,
@@ -305,27 +269,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#7f1d1d",
   },
-
   dangerTitle: {
     color: "#f87171",
     fontSize: 18,
     fontWeight: "bold",
     marginBottom: 8,
   },
-
   dangerText: {
     color: "#d1d5db",
     fontSize: 14,
     marginBottom: 14,
   },
-
   resetButton: {
     backgroundColor: "#7f1d1d",
     padding: 14,
     borderRadius: 13,
     alignItems: "center",
   },
-
   buttonText: {
     color: "white",
     fontSize: 15,
