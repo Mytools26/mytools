@@ -12,6 +12,11 @@ import {
 } from "react-native";
 
 import { useToolStore } from "../toolStore";
+import {
+  cloudDeleteTool,
+  cloudReturnTool,
+  cloudUpdateToolQuantity,
+} from "./cloudSync";
 import { exportPdf } from "./utils/pdf";
 
 const getStatusColor = (status?: string) => {
@@ -153,7 +158,10 @@ export default function WorkerDetailsScreen() {
       {
         text: "Delete",
         style: "destructive",
-        onPress: () => deleteTool(toolId),
+        onPress: async () => {
+          deleteTool(toolId);
+          await cloudDeleteTool(toolId);
+        },
       },
     ]);
   };
@@ -163,7 +171,10 @@ export default function WorkerDetailsScreen() {
       { text: "Cancel", style: "cancel" },
       {
         text: "Return",
-        onPress: () => returnTool(toolId),
+        onPress: async () => {
+          returnTool(toolId);
+          await cloudReturnTool(toolId);
+        },
       },
     ]);
   };
@@ -178,11 +189,12 @@ export default function WorkerDetailsScreen() {
         { text: "Cancel", style: "cancel" },
         {
           text: "Return All",
-          onPress: () => {
-            workerTools.forEach((tool, index) => {
+          onPress: async () => {
+            for (const [index, tool] of workerTools.entries()) {
               const realId = tool.id || `old-tool-${index}`;
               returnTool(realId);
-            });
+              await cloudReturnTool(realId);
+            }
           },
         },
       ]
@@ -194,12 +206,14 @@ export default function WorkerDetailsScreen() {
     setNewQuantity(quantity || "");
   };
 
-  const saveEdit = (tool: any, realId: string) => {
+  const saveEdit = async (tool: any, realId: string) => {
     updateTool(realId, {
       ...tool,
       id: realId,
       quantity: newQuantity,
     });
+
+    await cloudUpdateToolQuantity(realId, newQuantity);
 
     setEditingId(null);
     setNewQuantity("");
