@@ -215,7 +215,6 @@ export default function AddToolScreen() {
 
       if (userError) {
         Alert.alert("Supabase Error", userError.message);
-        setSaving(false);
         return;
       }
 
@@ -235,10 +234,6 @@ export default function AddToolScreen() {
         image: getAutoImage(toolName),
       }));
 
-      localTools.forEach((tool) => {
-        addTool(tool);
-      });
-
       if (user) {
         const cloudTools = localTools.map((tool) => ({
           user_id: user.id,
@@ -251,21 +246,47 @@ export default function AddToolScreen() {
           holder: tool.holder,
           status: tool.status,
           borrowed_by: tool.borrowedBy,
-          return_date: tool.returnDate,
+          return_date: null,
           notes: tool.notes,
           image: tool.image,
         }));
 
-        const { error: insertError } = await supabase
+        const { data: insertedTools, error: insertError } = await supabase
           .from("tools")
-          .insert(cloudTools);
+          .insert(cloudTools)
+          .select("*");
 
         if (insertError) {
           Alert.alert(
-            "Cloud Save Warning",
-            `Saved locally, but cloud save failed: ${insertError.message}`
+            "Cloud Save Failed",
+            insertError.message
           );
+          return;
         }
+
+        const toolsWithCloudIds = (insertedTools || []).map((item: any) => ({
+          id: item.id,
+          name: item.name || "",
+          profession: item.profession || "",
+          category: item.category || "",
+          brand: item.brand || "",
+          quantity: item.quantity || "0",
+          location: item.location || "Warehouse",
+          holder: item.holder || "",
+          status: item.status || "Available",
+          borrowedBy: item.borrowed_by || "",
+          returnDate: item.return_date || "",
+          notes: item.notes || "",
+          image: item.image || "tool",
+        }));
+
+        toolsWithCloudIds.forEach((tool) => {
+          addTool(tool);
+        });
+      } else {
+        localTools.forEach((tool) => {
+          addTool(tool);
+        });
       }
 
       Alert.alert(
