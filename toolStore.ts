@@ -51,6 +51,8 @@ interface ToolState {
   customTools: CustomTool[];
   historyLogs: HistoryLog[];
 
+  setTools: (tools: Tool[]) => void;
+
   addTool: (tool: Tool) => void;
 
   updateTool: (id: string, updatedTool: Tool) => void;
@@ -118,6 +120,11 @@ export const useToolStore = create<ToolState>()(
       warehouseStock: {},
       customTools: [],
       historyLogs: [],
+
+      setTools: (tools) =>
+        set(() => ({
+          tools,
+        })),
 
       addTool: (tool) =>
         set((state) => {

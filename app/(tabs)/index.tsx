@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 import {
   Alert,
@@ -13,6 +13,7 @@ import {
 } from "react-native";
 
 import { useToolStore } from "../../toolStore";
+import { supabase } from "../supabase";
 
 const getToolIcon = (image?: string) => {
   switch (image) {
@@ -47,64 +48,89 @@ const statuses = ["Available", "In Use", "Missing", "Broken"];
 
 export default function InventoryScreen() {
   const tools = useToolStore((state) => state.tools);
+  const setTools = useToolStore((state) => state.setTools);
+  const updateTool = useToolStore((state) => state.updateTool);
+  const deleteTool = useToolStore((state) => state.deleteTool);
 
-  const updateTool = useToolStore(
-    (state) => state.updateTool
-  );
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [selectedTool, setSelectedTool] = useState<any | null>(null);
+  const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
+  const [newQuantity, setNewQuantity] = useState("");
 
-  const deleteTool = useToolStore(
-    (state) => state.deleteTool
-  );
+  useEffect(() => {
+    loadToolsFromSupabase();
+  }, []);
 
-  const [search, setSearch] =
-    useState("");
+  const loadToolsFromSupabase = async () => {
+    try {
+      setLoading(true);
 
-  const [selectedTool, setSelectedTool] =
-    useState<any | null>(null);
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-  const [
-    selectedToolId,
-    setSelectedToolId,
-  ] = useState<string | null>(null);
+      if (userError) {
+        Alert.alert("Supabase Error", userError.message);
+        return;
+      }
 
-  const [newQuantity, setNewQuantity] =
-    useState("");
+      if (!user) {
+        Alert.alert("Login Required", "Please login first from Settings.");
+        return;
+      }
 
-  const filteredTools = tools.filter(
-    (tool) => {
-      const text =
-        search.toLowerCase();
+      const { data, error } = await supabase
+        .from("tools")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
 
-      return (
-        tool.name
-          ?.toLowerCase()
-          .includes(text) ||
-        tool.profession
-          ?.toLowerCase()
-          .includes(text) ||
-        tool.category
-          ?.toLowerCase()
-          .includes(text) ||
-        tool.location
-          ?.toLowerCase()
-          .includes(text) ||
-        tool.borrowedBy
-          ?.toLowerCase()
-          .includes(text) ||
-        tool.holder
-          ?.toLowerCase()
-          .includes(text) ||
-        tool.status
-          ?.toLowerCase()
-          .includes(text)
-      );
+      if (error) {
+        Alert.alert("Load Error", error.message);
+        return;
+      }
+
+      const loadedTools = (data || []).map((item: any) => ({
+        id: item.id,
+        name: item.name || "",
+        profession: item.profession || "",
+        category: item.category || "",
+        brand: item.brand || "",
+        quantity: item.quantity || "0",
+        location: item.location || "Warehouse",
+        holder: item.holder || "",
+        status: item.status || "Available",
+        borrowedBy: item.borrowed_by || "",
+        returnDate: item.return_date || "",
+        notes: item.notes || "",
+        image: item.image || "tool",
+      }));
+
+      setTools(loadedTools);
+    } catch (error) {
+      Alert.alert("Error", "Failed to load tools from Supabase.");
+    } finally {
+      setLoading(false);
     }
-  );
+  };
 
-  const openToolModal = (
-    tool: any,
-    toolId: string
-  ) => {
+  const filteredTools = tools.filter((tool) => {
+    const text = search.toLowerCase();
+
+    return (
+      tool.name?.toLowerCase().includes(text) ||
+      tool.profession?.toLowerCase().includes(text) ||
+      tool.category?.toLowerCase().includes(text) ||
+      tool.location?.toLowerCase().includes(text) ||
+      tool.borrowedBy?.toLowerCase().includes(text) ||
+      tool.holder?.toLowerCase().includes(text) ||
+      tool.status?.toLowerCase().includes(text)
+    );
+  });
+
+  const openToolModal = (tool: any, toolId: string) => {
     setSelectedTool(tool);
     setSelectedToolId(toolId);
     setNewQuantity(tool.quantity || "");
@@ -118,49 +144,33 @@ export default function InventoryScreen() {
 
   const grouped = filteredTools.reduce(
     (acc, tool) => {
-      const profession =
-        tool.profession || "Other";
+      const profession = tool.profession || "Other";
+      const category = tool.category || "General";
+      const brand = tool.brand || "No Brand";
 
-      const category =
-        tool.category || "General";
-
-      const brand =
-        tool.brand || "No Brand";
-
-      if (!acc[profession])
+      if (!acc[profession]) {
         acc[profession] = {};
-
-      if (!acc[profession][category])
-        acc[profession][category] = {};
-
-      if (
-        !acc[profession][category][brand]
-      ) {
-        acc[profession][category][brand] =
-          [];
       }
 
-      acc[profession][category][brand].push(
-        tool
-      );
+      if (!acc[profession][category]) {
+        acc[profession][category] = {};
+      }
+
+      if (!acc[profession][category][brand]) {
+        acc[profession][category][brand] = [];
+      }
+
+      acc[profession][category][brand].push(tool);
 
       return acc;
     },
-    {} as Record<
-      string,
-      Record<
-        string,
-        Record<string, typeof tools>
-      >
-    >
+    {} as Record<string, Record<string, Record<string, typeof tools>>>
   );
 
   return (
     <>
       <ScrollView style={styles.container}>
-        <Text style={styles.title}>
-          Inventory
-        </Text>
+        <Text style={styles.title}>Inventory</Text>
 
         <TextInput
           placeholder="Search tool, worker, location..."
@@ -171,227 +181,122 @@ export default function InventoryScreen() {
         />
 
         <TouchableOpacity
-          style={styles.addButton}
-          onPress={() =>
-            router.push("/add-tool")
-          }
+          style={styles.refreshButton}
+          onPress={loadToolsFromSupabase}
+          disabled={loading}
         >
-          <Text style={styles.addButtonText}>
-            + Add / Assign Tools
+          <Text style={styles.refreshButtonText}>
+            {loading ? "Loading..." : "Refresh from Cloud"}
           </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => router.push("/add-tool")}
+        >
+          <Text style={styles.addButtonText}>+ Add / Assign Tools</Text>
         </TouchableOpacity>
 
         {filteredTools.length === 0 ? (
           <Text style={styles.emptyText}>
-            {tools.length === 0
+            {loading
+              ? "Loading tools..."
+              : tools.length === 0
               ? "No tools yet"
               : "No results found"}
           </Text>
         ) : (
-          Object.entries(grouped).map(
-            ([profession, categories]) => (
-              <View
-                key={profession}
-                style={styles.card}
-              >
-                <Text
-                  style={styles.profession}
-                >
-                  {profession}
-                </Text>
+          Object.entries(grouped).map(([profession, categories]) => (
+            <View key={profession} style={styles.card}>
+              <Text style={styles.profession}>{profession}</Text>
 
-                {Object.entries(
-                  categories
-                ).map(
-                  ([category, brands]) => (
-                    <View
-                      key={category}
-                      style={styles.section}
-                    >
-                      <Text
-                        style={styles.category}
-                      >
-                        {category}
-                      </Text>
+              {Object.entries(categories).map(([category, brands]) => (
+                <View key={category} style={styles.section}>
+                  <Text style={styles.category}>{category}</Text>
 
-                      {Object.entries(
-                        brands
-                      ).map(
-                        ([
-                          brand,
-                          brandTools,
-                        ]) => (
-                          <View
-                            key={brand}
-                            style={
-                              styles.brandCard
-                            }
+                  {Object.entries(brands).map(([brand, brandTools]) => (
+                    <View key={brand} style={styles.brandCard}>
+                      {brand !== "No Brand" ? (
+                        <Text style={styles.brand}>{brand}</Text>
+                      ) : null}
+
+                      {brandTools.map((tool, index) => {
+                        const realId = tool.id || `old-tool-${index}`;
+
+                        return (
+                          <TouchableOpacity
+                            key={realId}
+                            style={styles.compactToolRow}
+                            activeOpacity={0.85}
+                            onPress={() => openToolModal(tool, realId)}
                           >
-                            {brand !==
-                            "No Brand" ? (
-                              <Text
-                                style={
-                                  styles.brand
-                                }
-                              >
-                                {brand}
+                            <View style={styles.compactLeft}>
+                              <Text style={styles.compactIcon}>
+                                {getToolIcon(tool.image)}
                               </Text>
-                            ) : null}
 
-                            {brandTools.map(
-                              (
-                                tool,
-                                index
-                              ) => {
-                                const realId =
-                                  tool.id ||
-                                  `old-tool-${index}`;
+                              <View style={styles.compactTextBox}>
+                                <Text style={styles.compactToolName}>
+                                  {tool.name}
+                                </Text>
 
-                                return (
-                                  <TouchableOpacity
-                                    key={
-                                      realId
-                                    }
-                                    style={
-                                      styles.compactToolRow
-                                    }
-                                    activeOpacity={
-                                      0.85
-                                    }
-                                    onPress={() =>
-                                      openToolModal(
-                                        tool,
-                                        realId
-                                      )
-                                    }
-                                  >
-                                    <View
-                                      style={
-                                        styles.compactLeft
-                                      }
-                                    >
-                                      <Text
-                                        style={
-                                          styles.compactIcon
-                                        }
-                                      >
-                                        {getToolIcon(
-                                          tool.image
-                                        )}
-                                      </Text>
+                                <Text style={styles.compactMeta}>
+                                  {(tool.borrowedBy ||
+                                    tool.holder ||
+                                    "Storage") +
+                                    " · " +
+                                    (tool.location || "No location")}
+                                </Text>
 
-                                      <View
-                                        style={
-                                          styles.compactTextBox
-                                        }
-                                      >
-                                        <Text
-                                          style={
-                                            styles.compactToolName
-                                          }
-                                        >
-                                          {
-                                            tool.name
-                                          }
-                                        </Text>
+                                <Text
+                                  style={[
+                                    styles.statusText,
+                                    tool.status === "Missing" &&
+                                      styles.statusMissing,
+                                    tool.status === "Broken" &&
+                                      styles.statusBroken,
+                                    tool.status === "Available" &&
+                                      styles.statusAvailable,
+                                    tool.status === "In Use" &&
+                                      styles.statusInUse,
+                                  ]}
+                                >
+                                  Status: {tool.status || "Unknown"}
+                                </Text>
+                              </View>
+                            </View>
 
-                                        <Text
-                                          style={
-                                            styles.compactMeta
-                                          }
-                                        >
-                                          {(tool.borrowedBy ||
-                                            tool.holder ||
-                                            "Storage") +
-                                            " · " +
-                                            (tool.location ||
-                                              "No location")}
-                                        </Text>
-
-                                        <Text
-                                          style={[
-                                            styles.statusText,
-
-                                            tool.status ===
-                                              "Missing" &&
-                                              styles.statusMissing,
-
-                                            tool.status ===
-                                              "Broken" &&
-                                              styles.statusBroken,
-
-                                            tool.status ===
-                                              "Available" &&
-                                              styles.statusAvailable,
-
-                                            tool.status ===
-                                              "In Use" &&
-                                              styles.statusInUse,
-                                          ]}
-                                        >
-                                          Status:{" "}
-                                          {tool.status ||
-                                            "Unknown"}
-                                        </Text>
-                                      </View>
-                                    </View>
-
-                                    <View
-                                      style={
-                                        styles.compactRight
-                                      }
-                                    >
-                                      <Text
-                                        style={
-                                          styles.compactQty
-                                        }
-                                      >
-                                        x
-                                        {tool.quantity ||
-                                          "0"}
-                                      </Text>
-                                    </View>
-                                  </TouchableOpacity>
-                                );
-                              }
-                            )}
-                          </View>
-                        )
-                      )}
+                            <View style={styles.compactRight}>
+                              <Text style={styles.compactQty}>
+                                x{tool.quantity || "0"}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
                     </View>
-                  )
-                )}
-              </View>
-            )
-          )
+                  ))}
+                </View>
+              ))}
+            </View>
+          ))
         )}
       </ScrollView>
 
-      <Modal
-        visible={!!selectedTool}
-        transparent
-        animationType="slide"
-      >
-        <View
-          style={styles.modalOverlay}
-        >
+      <Modal visible={!!selectedTool} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>
-              {selectedTool?.name}
-            </Text>
+            <Text style={styles.modalTitle}>{selectedTool?.name}</Text>
 
             <Text style={styles.modalMeta}>
               {(selectedTool?.borrowedBy ||
                 selectedTool?.holder ||
                 "Storage") +
                 " · " +
-                (selectedTool?.location ||
-                  "No location")}
+                (selectedTool?.location || "No location")}
             </Text>
 
-            <Text style={styles.modalLabel}>
-              Quantity
-            </Text>
+            <Text style={styles.modalLabel}>Quantity</Text>
 
             <TextInput
               style={styles.modalInput}
@@ -400,9 +305,7 @@ export default function InventoryScreen() {
               keyboardType="numeric"
             />
 
-            <Text style={styles.modalLabel}>
-              Status
-            </Text>
+            <Text style={styles.modalLabel}>Status</Text>
 
             <View style={styles.statusRow}>
               {statuses.map((status) => (
@@ -410,16 +313,13 @@ export default function InventoryScreen() {
                   key={status}
                   style={[
                     styles.statusButton,
-                    selectedTool?.status ===
-                      status &&
+                    selectedTool?.status === status &&
                       styles.statusButtonActive,
                   ]}
                   onPress={() => {
-                    if (
-                      !selectedTool ||
-                      !selectedToolId
-                    )
+                    if (!selectedTool || !selectedToolId) {
                       return;
+                    }
 
                     const updatedTool = {
                       ...selectedTool,
@@ -427,119 +327,65 @@ export default function InventoryScreen() {
                       status,
                     };
 
-                    updateTool(
-                      selectedToolId,
-                      updatedTool
-                    );
-
-                    setSelectedTool(
-                      updatedTool
-                    );
+                    updateTool(selectedToolId, updatedTool);
+                    setSelectedTool(updatedTool);
                   }}
                 >
-                  <Text
-                    style={
-                      styles.statusButtonText
-                    }
-                  >
-                    {status}
-                  </Text>
+                  <Text style={styles.statusButtonText}>{status}</Text>
                 </TouchableOpacity>
               ))}
             </View>
 
             <TouchableOpacity
-              style={
-                styles.saveModalButton
-              }
+              style={styles.saveModalButton}
               onPress={() => {
-                if (
-                  !selectedTool ||
-                  !selectedToolId
-                )
+                if (!selectedTool || !selectedToolId) {
                   return;
+                }
 
-                updateTool(
-                  selectedToolId,
-                  {
-                    ...selectedTool,
-                    id: selectedToolId,
-                    quantity:
-                      newQuantity,
-                  }
-                );
+                updateTool(selectedToolId, {
+                  ...selectedTool,
+                  id: selectedToolId,
+                  quantity: newQuantity,
+                });
 
                 closeToolModal();
               }}
             >
-              <Text
-                style={
-                  styles.modalButtonText
-                }
-              >
-                Save Changes
-              </Text>
+              <Text style={styles.modalButtonText}>Save Changes</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={
-                styles.deleteModalButton
-              }
+              style={styles.deleteModalButton}
               onPress={() => {
-                if (
-                  !selectedToolId
-                )
+                if (!selectedToolId) {
                   return;
+                }
 
-                Alert.alert(
-                  "Delete Tool",
-                  `Delete ${selectedTool?.name}?`,
-                  [
-                    {
-                      text: "Cancel",
-                      style:
-                        "cancel",
+                Alert.alert("Delete Tool", `Delete ${selectedTool?.name}?`, [
+                  {
+                    text: "Cancel",
+                    style: "cancel",
+                  },
+                  {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: () => {
+                      deleteTool(selectedToolId);
+                      closeToolModal();
                     },
-                    {
-                      text: "Delete",
-                      style:
-                        "destructive",
-                      onPress: () => {
-                        deleteTool(
-                          selectedToolId
-                        );
-
-                        closeToolModal();
-                      },
-                    },
-                  ]
-                );
+                  },
+                ]);
               }}
             >
-              <Text
-                style={
-                  styles.modalButtonText
-                }
-              >
-                Delete Tool
-              </Text>
+              <Text style={styles.modalButtonText}>Delete Tool</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={
-                styles.closeModalButton
-              }
-              onPress={
-                closeToolModal
-              }
+              style={styles.closeModalButton}
+              onPress={closeToolModal}
             >
-              <Text
-                style={
-                  styles.closeModalText
-                }
-              >
-                Close
-              </Text>
+              <Text style={styles.closeModalText}>Close</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -570,6 +416,22 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     fontSize: 16,
     marginBottom: 14,
+  },
+
+  refreshButton: {
+    backgroundColor: "#1f2937",
+    padding: 14,
+    borderRadius: 16,
+    alignItems: "center",
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#374151",
+  },
+
+  refreshButtonText: {
+    color: "white",
+    fontSize: 15,
+    fontWeight: "bold",
   },
 
   addButton: {
@@ -636,8 +498,7 @@ const styles = StyleSheet.create({
     padding: 10,
     marginBottom: 8,
     flexDirection: "row",
-    justifyContent:
-      "space-between",
+    justifyContent: "space-between",
     alignItems: "center",
   },
 
@@ -729,8 +590,7 @@ const styles = StyleSheet.create({
 
   modalOverlay: {
     flex: 1,
-    backgroundColor:
-      "rgba(0,0,0,0.65)",
+    backgroundColor: "rgba(0,0,0,0.65)",
     justifyContent: "flex-end",
   },
 
