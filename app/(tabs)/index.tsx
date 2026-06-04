@@ -3,12 +3,16 @@ import React, { useEffect, useState } from "react";
 
 import {
   Alert,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
 
@@ -54,25 +58,20 @@ export default function InventoryScreen() {
   const loadToolsFromSupabase = async () => {
     try {
       setLoading(true);
-
       const { data: { user }, error: userError } = await supabase.auth.getUser();
-
       if (userError || !user) {
         Alert.alert("Login Required", "Please login first from Settings.");
         return;
       }
-
       const { data, error } = await supabase
         .from("tools")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
-
       if (error) {
         Alert.alert("Load Error", error.message);
         return;
       }
-
       const loadedTools = (data || []).map((item: any) => ({
         id: item.id,
         name: item.name || "",
@@ -88,7 +87,6 @@ export default function InventoryScreen() {
         notes: item.notes || "",
         image: item.image || "tool",
       }));
-
       setTools(loadedTools);
     } catch (error) {
       Alert.alert("Error", "Failed to load tools from Supabase.");
@@ -117,6 +115,7 @@ export default function InventoryScreen() {
   };
 
   const closeToolModal = () => {
+    Keyboard.dismiss();
     setSelectedTool(null);
     setSelectedToolId(null);
     setNewQuantity("");
@@ -127,11 +126,9 @@ export default function InventoryScreen() {
       const profession = tool.profession || "Other";
       const category = tool.category || "General";
       const brand = tool.brand || "No Brand";
-
       if (!acc[profession]) acc[profession] = {};
       if (!acc[profession][category]) acc[profession][category] = {};
       if (!acc[profession][category][brand]) acc[profession][category][brand] = [];
-
       acc[profession][category][brand].push(tool);
       return acc;
     },
@@ -151,20 +148,11 @@ export default function InventoryScreen() {
           onChangeText={setSearch}
         />
 
-        <TouchableOpacity
-          style={styles.refreshButton}
-          onPress={loadToolsFromSupabase}
-          disabled={loading}
-        >
-          <Text style={styles.refreshButtonText}>
-            {loading ? "Loading..." : "Refresh from Cloud"}
-          </Text>
+        <TouchableOpacity style={styles.refreshButton} onPress={loadToolsFromSupabase} disabled={loading}>
+          <Text style={styles.refreshButtonText}>{loading ? "Loading..." : "Refresh from Cloud"}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => router.push("/add-tool")}
-        >
+        <TouchableOpacity style={styles.addButton} onPress={() => router.push("/add-tool")}>
           <Text style={styles.addButtonText}>+ Add / Assign Tools</Text>
         </TouchableOpacity>
 
@@ -176,49 +164,26 @@ export default function InventoryScreen() {
           Object.entries(grouped).map(([profession, categories]) => (
             <View key={profession} style={styles.card}>
               <Text style={styles.profession}>{profession}</Text>
-
               {Object.entries(categories).map(([category, brands]) => (
                 <View key={category} style={styles.section}>
                   <Text style={styles.category}>{category}</Text>
-
                   {Object.entries(brands).map(([brand, brandTools]) => (
                     <View key={brand} style={styles.brandCard}>
-                      {brand !== "No Brand" ? (
-                        <Text style={styles.brand}>{brand}</Text>
-                      ) : null}
-
+                      {brand !== "No Brand" ? <Text style={styles.brand}>{brand}</Text> : null}
                       {brandTools.map((tool, index) => {
                         const realId = tool.id || `old-tool-${index}`;
-
                         return (
-                          <TouchableOpacity
-                            key={realId}
-                            style={styles.compactToolRow}
-                            activeOpacity={0.85}
-                            onPress={() => openToolModal(tool, realId)}
-                          >
+                          <TouchableOpacity key={realId} style={styles.compactToolRow} activeOpacity={0.85} onPress={() => openToolModal(tool, realId)}>
                             <View style={styles.compactLeft}>
                               <Text style={styles.compactIcon}>{getToolIcon(tool.image)}</Text>
-
                               <View style={styles.compactTextBox}>
                                 <Text style={styles.compactToolName}>{tool.name}</Text>
-
-                                <Text style={styles.compactMeta}>
-                                  {(tool.borrowedBy || tool.holder || "Storage") + " · " + (tool.location || "No location")}
-                                </Text>
-
-                                <Text style={[
-                                  styles.statusText,
-                                  tool.status === "Missing" && styles.statusMissing,
-                                  tool.status === "Broken" && styles.statusBroken,
-                                  tool.status === "Available" && styles.statusAvailable,
-                                  tool.status === "In Use" && styles.statusInUse,
-                                ]}>
+                                <Text style={styles.compactMeta}>{(tool.borrowedBy || tool.holder || "Storage") + " · " + (tool.location || "No location")}</Text>
+                                <Text style={[styles.statusText, tool.status === "Missing" && styles.statusMissing, tool.status === "Broken" && styles.statusBroken, tool.status === "Available" && styles.statusAvailable, tool.status === "In Use" && styles.statusInUse]}>
                                   Status: {tool.status || "Unknown"}
                                 </Text>
                               </View>
                             </View>
-
                             <View style={styles.compactRight}>
                               <Text style={styles.compactQty}>x{tool.quantity || "0"}</Text>
                             </View>
@@ -235,84 +200,88 @@ export default function InventoryScreen() {
       </ScrollView>
 
       <Modal visible={!!selectedTool} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>{selectedTool?.name}</Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1 }}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.modalOverlay}>
+              <TouchableWithoutFeedback>
+                <View style={styles.modalCard}>
+                  <Text style={styles.modalTitle}>{selectedTool?.name}</Text>
+                  <Text style={styles.modalMeta}>
+                    {(selectedTool?.borrowedBy || selectedTool?.holder || "Storage") + " · " + (selectedTool?.location || "No location")}
+                  </Text>
 
-            <Text style={styles.modalMeta}>
-              {(selectedTool?.borrowedBy || selectedTool?.holder || "Storage") + " · " + (selectedTool?.location || "No location")}
-            </Text>
+                  <Text style={styles.modalLabel}>Quantity</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    value={newQuantity}
+                    onChangeText={setNewQuantity}
+                    keyboardType="numeric"
+                    returnKeyType="done"
+                    onSubmitEditing={Keyboard.dismiss}
+                  />
 
-            <Text style={styles.modalLabel}>Quantity</Text>
+                  <Text style={styles.modalLabel}>Status</Text>
+                  <View style={styles.statusRow}>
+                    {statuses.map((status) => (
+                      <TouchableOpacity
+                        key={status}
+                        style={[styles.statusButton, selectedTool?.status === status && styles.statusButtonActive]}
+                        onPress={() => {
+                          if (!selectedTool || !selectedToolId) return;
+                          const updatedTool = { ...selectedTool, id: selectedToolId, status };
+                          updateTool(selectedToolId, updatedTool);
+                          setSelectedTool(updatedTool);
+                        }}
+                      >
+                        <Text style={styles.statusButtonText}>{status}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
 
-            <TextInput
-              style={styles.modalInput}
-              value={newQuantity}
-              onChangeText={setNewQuantity}
-              keyboardType="numeric"
-            />
-
-            <Text style={styles.modalLabel}>Status</Text>
-
-            <View style={styles.statusRow}>
-              {statuses.map((status) => (
-                <TouchableOpacity
-                  key={status}
-                  style={[styles.statusButton, selectedTool?.status === status && styles.statusButtonActive]}
-                  onPress={() => {
-                    if (!selectedTool || !selectedToolId) return;
-                    const updatedTool = { ...selectedTool, id: selectedToolId, status };
-                    updateTool(selectedToolId, updatedTool);
-                    setSelectedTool(updatedTool);
-                  }}
-                >
-                  <Text style={styles.statusButtonText}>{status}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <TouchableOpacity
-              style={styles.saveModalButton}
-              onPress={async () => {
-                if (!selectedTool || !selectedToolId) return;
-                updateTool(selectedToolId, {
-                  ...selectedTool,
-                  id: selectedToolId,
-                  quantity: newQuantity,
-                });
-                await cloudUpdateToolQuantity(selectedToolId, newQuantity);
-                closeToolModal();
-              }}
-            >
-              <Text style={styles.modalButtonText}>Save Changes</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.deleteModalButton}
-              onPress={() => {
-                if (!selectedToolId) return;
-                Alert.alert("Delete Tool", `Delete ${selectedTool?.name}?`, [
-                  { text: "Cancel", style: "cancel" },
-                  {
-                    text: "Delete",
-                    style: "destructive",
-                    onPress: async () => {
-                      deleteTool(selectedToolId);
-                      await cloudDeleteTool(selectedToolId);
+                  <TouchableOpacity
+                    style={styles.saveModalButton}
+                    onPress={async () => {
+                      if (!selectedTool || !selectedToolId) return;
+                      updateTool(selectedToolId, { ...selectedTool, id: selectedToolId, quantity: newQuantity });
+                      await cloudUpdateToolQuantity(selectedToolId, newQuantity);
                       closeToolModal();
-                    },
-                  },
-                ]);
-              }}
-            >
-              <Text style={styles.modalButtonText}>Delete Tool</Text>
-            </TouchableOpacity>
+                    }}
+                  >
+                    <Text style={styles.modalButtonText}>Save Changes</Text>
+                  </TouchableOpacity>
 
-            <TouchableOpacity style={styles.closeModalButton} onPress={closeToolModal}>
-              <Text style={styles.closeModalText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+                  <TouchableOpacity
+                    style={styles.deleteModalButton}
+                    onPress={() => {
+                      if (!selectedToolId) return;
+                      Alert.alert("Delete Tool", `Delete ${selectedTool?.name}?`, [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: "Delete",
+                          style: "destructive",
+                          onPress: async () => {
+                            deleteTool(selectedToolId);
+                            await cloudDeleteTool(selectedToolId);
+                            closeToolModal();
+                          },
+                        },
+                      ]);
+                    }}
+                  >
+                    <Text style={styles.modalButtonText}>Delete Tool</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={styles.closeModalButton} onPress={closeToolModal}>
+                    <Text style={styles.closeModalText}>Close</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
     </>
   );
