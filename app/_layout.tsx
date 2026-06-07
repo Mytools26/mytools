@@ -17,16 +17,46 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [checking, setChecking] = useState(true);
   const [loggedIn, setLoggedIn] = useState(false);
+  const [role, setRole] = useState<"manager" | "worker" | null>(null);
+
+  const checkRoleAndSession = async (userId: string) => {
+    try {
+      const { data } = await supabase
+        .from("company_members")
+        .select("role")
+        .eq("user_id", userId)
+        .single();
+
+      if (data?.role === "worker") {
+        setRole("worker");
+      } else {
+        setRole("manager");
+      }
+    } catch {
+      setRole("manager");
+    }
+  };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setLoggedIn(!!data.session);
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (data.session) {
+        setLoggedIn(true);
+        await checkRoleAndSession(data.session.user.id);
+      } else {
+        setLoggedIn(false);
+      }
       setChecking(false);
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setLoggedIn(!!session);
+      async (_event, session) => {
+        if (session) {
+          setLoggedIn(true);
+          await checkRoleAndSession(session.user.id);
+        } else {
+          setLoggedIn(false);
+          setRole(null);
+        }
       }
     );
 
@@ -50,10 +80,15 @@ export default function RootLayout() {
         <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="add-tool" options={{ headerShown: false }} />
         <Stack.Screen name="edit-tool" options={{ headerShown: false }} />
+        <Stack.Screen name="worker-view" options={{ headerShown: false }} />
       </Stack>
 
       {loggedIn ? (
-        <Redirect href="/(tabs)/dashboard" />
+        role === "worker" ? (
+          <Redirect href="/worker-view" />
+        ) : (
+          <Redirect href="/(tabs)/dashboard" />
+        )
       ) : (
         <Redirect href="/login" />
       )}
