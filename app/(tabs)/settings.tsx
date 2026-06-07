@@ -23,6 +23,8 @@ const STORAGE_KEY = "my-tools-storage";
 export default function SettingsScreen() {
   const [companyName, setCompanyName] = useState("MyTools Company");
   const [darkMode, setDarkMode] = useState(true);
+  const [workerEmail, setWorkerEmail] = useState("");
+  const [addingWorker, setAddingWorker] = useState(false);
 
   useEffect(() => {
     loadSettings();
@@ -43,6 +45,70 @@ export default function SettingsScreen() {
       JSON.stringify({ companyName, darkMode })
     );
     Alert.alert("Saved", "Settings saved successfully.");
+  };
+
+  const handleAddWorker = async () => {
+    if (!workerEmail.trim()) {
+      Alert.alert("Error", "Enter worker email.");
+      return;
+    }
+
+    setAddingWorker(true);
+
+    try {
+      // Βρίσκουμε τον user με αυτό το email
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Βρίσκουμε την εταιρεία του manager
+      const { data: memberData } = await supabase
+        .from("company_members")
+        .select("company_id")
+        .eq("user_id", user.id)
+        .single();
+
+      if (!memberData?.company_id) {
+        Alert.alert("Error", "Company not found.");
+        return;
+      }
+
+      // Ψάχνουμε τον worker με το email
+      const { data: workerData, error: workerError } = await supabase
+        .from("auth.users")
+        .select("id")
+        .eq("email", workerEmail.trim())
+        .single();
+
+      if (workerError || !workerData) {
+        // Αν δεν βρεθεί, δημιουργούμε invite link
+        Alert.alert(
+          "Worker Not Found",
+          `No account found for ${workerEmail}. Ask the worker to Register first with this email, then you can add them.`
+        );
+        return;
+      }
+
+      // Προσθέτουμε τον worker στην εταιρεία
+      const { error: insertError } = await supabase
+        .from("company_members")
+        .insert({
+          company_id: memberData.company_id,
+          user_id: workerData.id,
+          role: "worker",
+        });
+
+      if (insertError) {
+        Alert.alert("Error", insertError.message);
+        return;
+      }
+
+      Alert.alert("Success", `${workerEmail} added as worker!`);
+      setWorkerEmail("");
+    } catch (e) {
+      Alert.alert("Error", "Something went wrong.");
+    } finally {
+      setAddingWorker(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -146,6 +212,31 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.card}>
+        <Text style={styles.label}>👷 Add Worker</Text>
+        <Text style={styles.hint}>
+          Add a worker to your company. They must first create an account with this email.
+        </Text>
+        <TextInput
+          style={styles.input}
+          value={workerEmail}
+          onChangeText={setWorkerEmail}
+          placeholder="Worker email"
+          placeholderTextColor="#888"
+          autoCapitalize="none"
+          keyboardType="email-address"
+        />
+        <TouchableOpacity
+          style={styles.addWorkerButton}
+          onPress={handleAddWorker}
+          disabled={addingWorker}
+        >
+          <Text style={styles.buttonText}>
+            {addingWorker ? "Adding..." : "Add Worker"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.card}>
         <Text style={styles.label}>Account</Text>
         <Text style={styles.hint}>
           You are logged in. Tap below to sign out.
@@ -184,111 +275,22 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#020b1f",
-    padding: 16,
-  },
-  title: {
-    color: "white",
-    fontSize: 40,
-    fontWeight: "bold",
-    marginTop: 54,
-  },
-  subtitle: {
-    color: "#9ca3af",
-    fontSize: 16,
-    marginBottom: 18,
-  },
-  card: {
-    backgroundColor: "#111c34",
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: "#1f2937",
-  },
-  label: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 10,
-  },
-  hint: {
-    color: "#9ca3af",
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: 12,
-  },
-  input: {
-    backgroundColor: "#020b1f",
-    borderRadius: 12,
-    padding: 14,
-    color: "white",
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: "#374151",
-  },
-  switchRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  saveButton: {
-    backgroundColor: "#ff6b00",
-    padding: 14,
-    borderRadius: 13,
-    alignItems: "center",
-    marginTop: 14,
-  },
-  logoutButton: {
-    backgroundColor: "#7f1d1d",
-    padding: 14,
-    borderRadius: 13,
-    alignItems: "center",
-    marginTop: 4,
-  },
-  exportButton: {
-    backgroundColor: "#2563eb",
-    padding: 14,
-    borderRadius: 13,
-    alignItems: "center",
-    marginTop: 4,
-  },
-  importButton: {
-    backgroundColor: "#16a34a",
-    padding: 14,
-    borderRadius: 13,
-    alignItems: "center",
-    marginTop: 10,
-  },
-  dangerCard: {
-    backgroundColor: "#111c34",
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#7f1d1d",
-  },
-  dangerTitle: {
-    color: "#f87171",
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 8,
-  },
-  dangerText: {
-    color: "#d1d5db",
-    fontSize: 14,
-    marginBottom: 14,
-  },
-  resetButton: {
-    backgroundColor: "#7f1d1d",
-    padding: 14,
-    borderRadius: 13,
-    alignItems: "center",
-  },
-  buttonText: {
-    color: "white",
-    fontSize: 15,
-    fontWeight: "bold",
-  },
+  container: { flex: 1, backgroundColor: "#020b1f", padding: 16 },
+  title: { color: "white", fontSize: 40, fontWeight: "bold", marginTop: 54 },
+  subtitle: { color: "#9ca3af", fontSize: 16, marginBottom: 18 },
+  card: { backgroundColor: "#111c34", borderRadius: 18, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: "#1f2937" },
+  label: { color: "white", fontSize: 18, fontWeight: "bold", marginBottom: 10 },
+  hint: { color: "#9ca3af", fontSize: 13, lineHeight: 18, marginBottom: 12 },
+  input: { backgroundColor: "#020b1f", borderRadius: 12, padding: 14, color: "white", fontSize: 16, borderWidth: 1, borderColor: "#374151" },
+  switchRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  saveButton: { backgroundColor: "#ff6b00", padding: 14, borderRadius: 13, alignItems: "center", marginTop: 14 },
+  addWorkerButton: { backgroundColor: "#7c3aed", padding: 14, borderRadius: 13, alignItems: "center", marginTop: 14 },
+  logoutButton: { backgroundColor: "#7f1d1d", padding: 14, borderRadius: 13, alignItems: "center", marginTop: 4 },
+  exportButton: { backgroundColor: "#2563eb", padding: 14, borderRadius: 13, alignItems: "center", marginTop: 4 },
+  importButton: { backgroundColor: "#16a34a", padding: 14, borderRadius: 13, alignItems: "center", marginTop: 10 },
+  dangerCard: { backgroundColor: "#111c34", borderRadius: 18, padding: 16, borderWidth: 1, borderColor: "#7f1d1d" },
+  dangerTitle: { color: "#f87171", fontSize: 18, fontWeight: "bold", marginBottom: 8 },
+  dangerText: { color: "#d1d5db", fontSize: 14, marginBottom: 14 },
+  resetButton: { backgroundColor: "#7f1d1d", padding: 14, borderRadius: 13, alignItems: "center" },
+  buttonText: { color: "white", fontSize: 15, fontWeight: "bold" },
 });
