@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 import {
   Alert,
@@ -12,6 +12,7 @@ import {
 } from "react-native";
 
 import { useToolStore } from "../toolStore";
+import { supabase } from "./supabase";
 import toolCatalog from "./toolCatalog";
 
 const professions = Object.keys(toolCatalog || {});
@@ -34,9 +35,7 @@ const getToolIcon = (toolName: string) => {
 const guessCategory = (toolName: string) => {
   const name = toolName.toLowerCase();
 
-  if (name.includes("screwdriver")) {
-    return "Screwdrivers";
-  }
+  if (name.includes("screwdriver")) return "Screwdrivers";
 
   if (
     name.includes("drill") ||
@@ -46,10 +45,7 @@ const guessCategory = (toolName: string) => {
     return "PowerTools";
   }
 
-  if (
-    name.includes("battery") ||
-    name.includes("charger")
-  ) {
+  if (name.includes("battery") || name.includes("charger")) {
     return "BatteriesChargers";
   }
 
@@ -80,61 +76,61 @@ const getAutoImage = (toolName: string) => {
 };
 
 export default function WarehouseScreen() {
-  const warehouseStock = useToolStore(
-    (state) => state.warehouseStock || {}
-  );
-
+  const warehouseStock = useToolStore((state) => state.warehouseStock || {});
   const setWarehouseQuantity = useToolStore(
     (state) => state.setWarehouseQuantity
   );
 
-  const tools = useToolStore(
-    (state) => state.tools || []
-  );
+  const tools = useToolStore((state) => state.tools || []);
+  const customTools = useToolStore((state) => state.customTools || []);
+  const addCustomTool = useToolStore((state) => state.addCustomTool);
 
-  const customTools = useToolStore(
-    (state) => state.customTools || []
-  );
-
-  const addCustomTool = useToolStore(
-    (state) => state.addCustomTool
-  );
-
-  const [profession, setProfession] = useState(
-    professions[0] || "Electrician"
-  );
-
+  const [profession, setProfession] = useState(professions[0] || "Electrician");
   const [search, setSearch] = useState("");
-
   const [quantity, setQuantity] = useState("");
+  const [draftStock, setDraftStock] = useState<Record<string, string>>({});
 
-  const [draftStock, setDraftStock] = useState<
-    Record<string, string>
-  >({});
+  useEffect(() => {
+    const loadWarehouseStock = async () => {
+      const { data, error } = await supabase
+        .from("warehouse_stock")
+        .select("*");
+
+      if (error) {
+        console.log("Warehouse load error:", error.message);
+        return;
+      }
+
+      if (!data) return;
+
+      data.forEach((item: any) => {
+        setWarehouseQuantity(
+          item.tool_name,
+          String(item.quantity ?? 0)
+        );
+      });
+    };
+
+    loadWarehouseStock();
+  }, [setWarehouseQuantity]);
 
   const currentCatalog =
-    toolCatalog[
-      profession as keyof typeof toolCatalog
-    ] || {};
+    toolCatalog[profession as keyof typeof toolCatalog] || {};
 
   const allTools = useMemo(() => {
-    const catalogTools = Object.entries(
-      currentCatalog
-    ).flatMap(([sectionName, sectionTools]) => {
-      const safeTools = Array.isArray(sectionTools)
-        ? sectionTools
-        : [];
+    const catalogTools = Object.entries(currentCatalog).flatMap(
+      ([sectionName, sectionTools]) => {
+        const safeTools = Array.isArray(sectionTools) ? sectionTools : [];
 
-      return safeTools.map((toolName) => ({
-        name: toolName,
-        section: sectionName,
-      }));
-    });
+        return safeTools.map((toolName) => ({
+          name: toolName,
+          section: sectionName,
+        }));
+      }
+    );
 
     const customProfessionTools = customTools
-      .filter(
-        (tool) => tool.profession === profession
-      )
+      .filter((tool) => tool.profession === profession)
       .map((tool) => ({
         name: tool.name,
         section: tool.category || "CustomTools",
@@ -151,66 +147,41 @@ export default function WarehouseScreen() {
       )
     : allTools;
 
-  const groupedTools = filteredTools.reduce(
-    (acc, tool) => {
-      if (!acc[tool.section]) {
-        acc[tool.section] = [];
-      }
+  const groupedTools = filteredTools.reduce((acc, tool) => {
+    if (!acc[tool.section]) {
+      acc[tool.section] = [];
+    }
 
-      if (!acc[tool.section].includes(tool.name)) {
-        acc[tool.section].push(tool.name);
-      }
+    if (!acc[tool.section].includes(tool.name)) {
+      acc[tool.section].push(tool.name);
+    }
 
-      return acc;
-    },
-    {} as Record<string, string[]>
-  );
+    return acc;
+  }, {} as Record<string, string[]>);
 
-  const getWarehouseTotal = (
-    toolName: string
-  ) => {
-    return Number(
-      draftStock[toolName] ??
-        warehouseStock[toolName] ??
-        0
-    );
+  const getWarehouseTotal = (toolName: string) => {
+    return Number(draftStock[toolName] ?? warehouseStock[toolName] ?? 0);
   };
 
-  const getAssignedQuantity = (
-    toolName: string
-  ) => {
+  const getAssignedQuantity = (toolName: string) => {
     return tools
       .filter(
         (tool) =>
           tool.name === toolName &&
-          (tool.status === "In Use" ||
-            tool.borrowedBy ||
-            tool.holder)
+          (tool.status === "In Use" || tool.borrowedBy || tool.holder)
       )
-      .reduce(
-        (sum, tool) =>
-          sum + Number(tool.quantity || 0),
-        0
-      );
+      .reduce((sum, tool) => sum + Number(tool.quantity || 0), 0);
   };
 
-  const getAvailableQuantity = (
-    toolName: string
-  ) => {
-    const total =
-      getWarehouseTotal(toolName);
-
-    const assigned =
-      getAssignedQuantity(toolName);
+  const getAvailableQuantity = (toolName: string) => {
+    const total = getWarehouseTotal(toolName);
+    const assigned = getAssignedQuantity(toolName);
 
     return Math.max(total - assigned, 0);
   };
 
-  const getToolStatus = (
-    toolName: string
-  ) => {
-    const available =
-      getAvailableQuantity(toolName);
+  const getToolStatus = (toolName: string) => {
+    const available = getAvailableQuantity(toolName);
 
     if (available <= 0) {
       return {
@@ -232,49 +203,44 @@ export default function WarehouseScreen() {
     };
   };
 
-  const saveQuantity = (
-    toolName: string
-  ) => {
-    const value = String(
-      getWarehouseTotal(toolName)
+  const saveQuantity = async (toolName: string) => {
+    const value = String(getWarehouseTotal(toolName));
+
+    setWarehouseQuantity(toolName, value);
+
+    const { error } = await supabase.from("warehouse_stock").upsert(
+      {
+        tool_name: toolName,
+        quantity: Number(value),
+      },
+      {
+        onConflict: "tool_name",
+      }
     );
 
-    setWarehouseQuantity(
-      toolName,
-      value
-    );
+    if (error) {
+      Alert.alert("Error", error.message);
+      return;
+    }
 
-    Alert.alert(
-      "Saved",
-      `${toolName} stock updated`
-    );
+    Alert.alert("Saved", `${toolName} stock updated`);
   };
 
-  const saveSmartTool = () => {
+  const saveSmartTool = async () => {
     const toolName = search.trim();
 
     if (!toolName) {
-      Alert.alert(
-        "Error",
-        "Enter tool name"
-      );
-
+      Alert.alert("Error", "Enter tool name");
       return;
     }
 
     if (!quantity.trim()) {
-      Alert.alert(
-        "Error",
-        "Enter quantity"
-      );
-
+      Alert.alert("Error", "Enter quantity");
       return;
     }
 
     const existingTool = allTools.find(
-      (tool) =>
-        tool.name.toLowerCase() ===
-        toolName.toLowerCase()
+      (tool) => tool.name.toLowerCase() === toolName.toLowerCase()
     );
 
     if (!existingTool) {
@@ -287,16 +253,26 @@ export default function WarehouseScreen() {
       });
     }
 
-    setWarehouseQuantity(
-      toolName,
-      quantity.trim()
+    setWarehouseQuantity(toolName, quantity.trim());
+
+    const { error } = await supabase.from("warehouse_stock").upsert(
+      {
+        tool_name: toolName,
+        quantity: Number(quantity.trim()),
+      },
+      {
+        onConflict: "tool_name",
+      }
     );
+
+    if (error) {
+      Alert.alert("Error", error.message);
+      return;
+    }
 
     Alert.alert(
       "Saved",
-      existingTool
-        ? `${toolName} updated`
-        : `${toolName} added`
+      existingTool ? `${toolName} updated` : `${toolName} added`
     );
 
     setSearch("");
@@ -305,18 +281,12 @@ export default function WarehouseScreen() {
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.title}>
-        Warehouse
-      </Text>
+      <Text style={styles.title}>Warehouse</Text>
 
-      <Text style={styles.subtitle}>
-        Smart warehouse management
-      </Text>
+      <Text style={styles.subtitle}>Smart warehouse management</Text>
 
       <View style={styles.topCard}>
-        <Text style={styles.label}>
-          Profession
-        </Text>
+        <Text style={styles.label}>Profession</Text>
 
         <ScrollView
           horizontal
@@ -328,8 +298,7 @@ export default function WarehouseScreen() {
               key={item}
               style={[
                 styles.professionButton,
-                profession === item &&
-                  styles.professionButtonActive,
+                profession === item && styles.professionButtonActive,
               ]}
               onPress={() => {
                 setProfession(item);
@@ -339,8 +308,7 @@ export default function WarehouseScreen() {
               <Text
                 style={[
                   styles.professionText,
-                  profession === item &&
-                    styles.professionTextActive,
+                  profession === item && styles.professionTextActive,
                 ]}
               >
                 {item}
@@ -366,157 +334,95 @@ export default function WarehouseScreen() {
           keyboardType="numeric"
         />
 
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={saveSmartTool}
-        >
-          <Text style={styles.addButtonText}>
-            Save Tool
-          </Text>
+        <TouchableOpacity style={styles.addButton} onPress={saveSmartTool}>
+          <Text style={styles.addButtonText}>Save Tool</Text>
         </TouchableOpacity>
       </View>
 
-      {Object.entries(groupedTools).map(
-        ([sectionName, sectionTools]) => (
-          <View
-            key={sectionName}
-            style={styles.sectionCard}
-          >
-            <Text style={styles.sectionTitle}>
-              {sectionName}
-            </Text>
+      {Object.entries(groupedTools).map(([sectionName, sectionTools]) => (
+        <View key={sectionName} style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>{sectionName}</Text>
 
-            {sectionTools.map((toolName) => {
-              const total =
-                getWarehouseTotal(toolName);
+          {sectionTools.map((toolName) => {
+            const total = getWarehouseTotal(toolName);
+            const assigned = getAssignedQuantity(toolName);
+            const available = getAvailableQuantity(toolName);
+            const status = getToolStatus(toolName);
 
-              const assigned =
-                getAssignedQuantity(toolName);
+            return (
+              <TouchableOpacity
+                key={toolName}
+                style={styles.toolCard}
+                activeOpacity={0.9}
+                onPress={() => {
+                  const firstTool = tools.find((tool) => tool.name === toolName);
 
-              const available =
-                getAvailableQuantity(toolName);
+                  if (firstTool?.id) {
+                    router.push({
+                      pathname: "/item-details",
+                      params: {
+                        toolId: firstTool.id,
+                      },
+                    });
+                  }
+                }}
+              >
+                <View style={styles.leftBox}>
+                  <Text style={styles.icon}>{getToolIcon(toolName)}</Text>
 
-              const status =
-                getToolStatus(toolName);
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.toolName}>{toolName}</Text>
 
-              return (
-                <TouchableOpacity
-                  key={toolName}
-                  style={styles.toolCard}
-                  activeOpacity={0.9}
-                  onPress={() => {
-                    const firstTool =
-                      tools.find(
-                        (tool) =>
-                          tool.name === toolName
-                      );
-
-                    if (firstTool?.id) {
-                      router.push({
-                        pathname:
-                          "/item-details",
-
-                        params: {
-                          toolId:
-                            firstTool.id,
-                        },
-                      });
-                    }
-                  }}
-                >
-                  <View style={styles.leftBox}>
-                    <Text style={styles.icon}>
-                      {getToolIcon(toolName)}
+                    <Text style={styles.toolMeta}>
+                      Total: {total} · Assigned: {assigned}
                     </Text>
 
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={styles.toolName}
-                      >
-                        {toolName}
-                      </Text>
+                    <Text style={styles.availableText}>
+                      Available: {available}
+                    </Text>
 
-                      <Text
-                        style={styles.toolMeta}
-                      >
-                        Total: {total} ·
-                        Assigned: {assigned}
-                      </Text>
-
-                      <Text
-                        style={
-                          styles.availableText
-                        }
-                      >
-                        Available:{" "}
-                        {available}
-                      </Text>
-
-                      <Text
-                        style={{
-                          color:
-                            status.color,
-                          fontWeight:
-                            "bold",
-                          marginTop: 4,
-                        }}
-                      >
-                        {status.text}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.rightBox}>
-                    <TextInput
-                      placeholder="0"
-                      placeholderTextColor="#888"
-                      style={
-                        styles.quantityInput
-                      }
-                      value={String(total)}
-                      onChangeText={(value) =>
-                        setDraftStock(
-                          (current) => ({
-                            ...current,
-                            [toolName]:
-                              value,
-                          })
-                        )
-                      }
-                      keyboardType="numeric"
-                    />
-
-                    <TouchableOpacity
-                      style={styles.saveButton}
-                      onPress={() =>
-                        saveQuantity(
-                          toolName
-                        )
-                      }
+                    <Text
+                      style={{
+                        color: status.color,
+                        fontWeight: "bold",
+                        marginTop: 4,
+                      }}
                     >
-                      <Text
-                        style={
-                          styles.saveButtonText
-                        }
-                      >
-                        Save
-                      </Text>
-                    </TouchableOpacity>
+                      {status.text}
+                    </Text>
                   </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )
-      )}
+                </View>
 
-      <TouchableOpacity
-        style={styles.backButton}
-        onPress={() => router.back()}
-      >
-        <Text style={styles.backButtonText}>
-          Back
-        </Text>
+                <View style={styles.rightBox}>
+                  <TextInput
+                    placeholder="0"
+                    placeholderTextColor="#888"
+                    style={styles.quantityInput}
+                    value={String(total)}
+                    onChangeText={(value) =>
+                      setDraftStock((current) => ({
+                        ...current,
+                        [toolName]: value,
+                      }))
+                    }
+                    keyboardType="numeric"
+                  />
+
+                  <TouchableOpacity
+                    style={styles.saveButton}
+                    onPress={() => saveQuantity(toolName)}
+                  >
+                    <Text style={styles.saveButtonText}>Save</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      ))}
+
+      <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <Text style={styles.backButtonText}>Back</Text>
       </TouchableOpacity>
 
       <View style={{ height: 70 }} />
