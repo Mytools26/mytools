@@ -3,7 +3,7 @@ import { NativeModules, Platform } from "react-native";
 
 export type Language = "en" | "el" | "de";
 
-const translations = {
+export const translations = {
   en: {
     appName: "MyTools", appSubtitle: "Professional Tool Management",
     assignTool: "Assign Tool", returnTool: "Return Tool", findTool: "Find Tool",
@@ -127,14 +127,9 @@ const getDeviceLanguage = (): Language => {
 
 export const loadLanguage = async () => {
   const saved = await AsyncStorage.getItem(LANGUAGE_KEY);
-  if (saved && (saved === "en" || saved === "el" || saved === "de")) {
-    const { useToolStore } = require("../toolStore");
-    useToolStore.getState().setLanguage(saved as Language);
-  } else {
-    const lang = getDeviceLanguage();
-    const { useToolStore } = require("../toolStore");
-    useToolStore.getState().setLanguage(lang);
-  }
+  const lang = (saved === "en" || saved === "el" || saved === "de") ? saved as Language : getDeviceLanguage();
+  const { useToolStore } = require("../toolStore");
+  useToolStore.getState().setLanguage(lang);
 };
 
 export const setLanguage = async (lang: Language) => {
@@ -148,11 +143,21 @@ export const getLanguage = (): Language => {
   return useToolStore.getState().language;
 };
 
-// Διαβάζει γλώσσα από Zustand — αλλάζει αμέσως παντού!
+// Κύρια συνάρτηση μετάφρασης — παίρνει γλώσσα από Zustand
 export const t = (key: keyof typeof translations.en): string => {
   const { useToolStore } = require("../toolStore");
   const lang = useToolStore.getState().language as Language;
   return translations[lang]?.[key] || translations.en[key] || key;
+};
+
+// Hook για χρήση σε components — εξασφαλίζει re-render
+export const useTranslation = () => {
+  const { useToolStore } = require("../toolStore");
+  const language = useToolStore((state: any) => state.language) as Language;
+  const tr = (key: keyof typeof translations.en): string => {
+    return translations[language]?.[key] || translations.en[key] || key;
+  };
+  return { t: tr, language };
 };
 
 export default translations;

@@ -3,8 +3,12 @@ import React from "react";
 
 import { HapticTab } from "@/components/haptic-tab";
 import { IconSymbol } from "@/components/ui/icon-symbol";
+import { useToolStore } from "../../toolStore";
+import { t } from "../i18n";
 
 export default function TabLayout() {
+  const language = useToolStore((state) => state.language); // auto re-render on language change
+
   return (
     <Tabs
       screenOptions={{
@@ -38,7 +42,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Inventory",
+          title: t("inventory"),
           tabBarIcon: ({ color }) => (
             <IconSymbol size={28} name="shippingbox.fill" color={color} />
           ),
@@ -48,13 +52,9 @@ export default function TabLayout() {
       <Tabs.Screen
         name="borrowed"
         options={{
-          title: "Borrowed",
+          title: t("workers"),
           tabBarIcon: ({ color }) => (
-            <IconSymbol
-              size={28}
-              name="person.crop.circle.badge.checkmark"
-              color={color}
-            />
+            <IconSymbol size={28} name="person.crop.circle.badge.checkmark" color={color} />
           ),
         }}
       />
@@ -62,7 +62,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          title: "Settings",
+          title: t("settings"),
           tabBarIcon: ({ color }) => (
             <IconSymbol size={28} name="gearshape.fill" color={color} />
           ),

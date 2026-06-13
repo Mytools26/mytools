@@ -16,7 +16,7 @@ import {
 } from "react-native";
 
 import { useToolStore } from "../../toolStore";
-import { Language, loadLanguage, setLanguage } from "../i18n";
+import { Language, loadLanguage, setLanguage, useTranslation } from "../i18n";
 import { supabase } from "../supabase";
 
 const SETTINGS_KEY = "my-tools-settings";
@@ -34,9 +34,9 @@ export default function SettingsScreen() {
   const [workerEmail, setWorkerEmail] = useState("");
   const [addingWorker, setAddingWorker] = useState(false);
 
-  // Γλώσσα από Zustand — όταν αλλάζει ενημερώνονται ΟΛΟΙ
   const currentLang = useToolStore((state) => state.language);
   const setStoreLang = useToolStore((state) => state.setLanguage);
+  const { t } = useTranslation(); // re-renders on language change!
 
   useEffect(() => {
     loadSettings();
@@ -54,46 +54,40 @@ export default function SettingsScreen() {
 
   const saveSettings = async () => {
     await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify({ companyName, darkMode }));
-    Alert.alert("Saved", "Settings saved successfully.");
+    Alert.alert(t("saved"), "Settings saved successfully.");
   };
 
   const handleLanguageChange = async (lang: Language) => {
-    await setLanguage(lang);  // Αποθηκεύει στο AsyncStorage
-    setStoreLang(lang);        // Ενημερώνει ΟΛΑ τα screens αμέσως!
+    await setLanguage(lang);
+    setStoreLang(lang);
     Alert.alert("✅", lang === "el" ? "Γλώσσα άλλαξε!" : lang === "de" ? "Sprache geändert!" : "Language changed!");
   };
 
   const handleAddWorker = async () => {
-    if (!workerEmail.trim()) {
-      Alert.alert("Error", "Enter worker email.");
-      return;
-    }
+    if (!workerEmail.trim()) { Alert.alert(t("error"), "Enter worker email."); return; }
     setAddingWorker(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const { data: memberData } = await supabase.from("company_members").select("company_id").eq("user_id", user.id).single();
-      if (!memberData?.company_id) { Alert.alert("Error", "Company not found."); return; }
+      if (!memberData?.company_id) { Alert.alert(t("error"), "Company not found."); return; }
       const { data: workerData, error: workerError } = await supabase.from("auth.users").select("id").eq("email", workerEmail.trim()).single();
-      if (workerError || !workerData) {
-        Alert.alert("Worker Not Found", `No account found for ${workerEmail}. Ask the worker to Register first with this email, then you can add them.`);
-        return;
-      }
+      if (workerError || !workerData) { Alert.alert("Worker Not Found", `No account found for ${workerEmail}.`); return; }
       const { error: insertError } = await supabase.from("company_members").insert({ company_id: memberData.company_id, user_id: workerData.id, role: "worker" });
-      if (insertError) { Alert.alert("Error", insertError.message); return; }
-      Alert.alert("Success", `${workerEmail} added as worker!`);
+      if (insertError) { Alert.alert(t("error"), insertError.message); return; }
+      Alert.alert(t("success"), `${workerEmail} added as worker!`);
       setWorkerEmail("");
     } catch (e) {
-      Alert.alert("Error", "Something went wrong.");
+      Alert.alert(t("error"), "Something went wrong.");
     } finally {
       setAddingWorker(false);
     }
   };
 
   const handleLogout = async () => {
-    Alert.alert("Logout", "Are you sure you want to logout?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Logout", style: "destructive", onPress: async () => { await supabase.auth.signOut(); router.replace("/login"); } },
+    Alert.alert(t("logout"), "Are you sure you want to logout?", [
+      { text: t("cancel"), style: "cancel" },
+      { text: t("logout"), style: "destructive", onPress: async () => { await supabase.auth.signOut(); router.replace("/login"); } },
     ]);
   };
 
@@ -116,53 +110,46 @@ export default function SettingsScreen() {
       if (parsed.storage) await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(parsed.storage));
       Alert.alert("Import Complete", "Backup restored. Restart Expo.");
     } catch (error) {
-      Alert.alert("Import Failed", "Invalid backup file.");
+      Alert.alert(t("error"), "Invalid backup file.");
     }
   };
 
   const resetApp = async () => {
     Alert.alert("Reset Application", "This will delete all tools, workers, warehouse stock and history. Continue?", [
-      { text: "Cancel", style: "cancel" },
+      { text: t("cancel"), style: "cancel" },
       { text: "Reset", style: "destructive", onPress: async () => { await AsyncStorage.clear(); Alert.alert("Done", "All app data deleted. Restart Expo."); } },
     ]);
   };
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.title}>Settings</Text>
-      <Text style={styles.subtitle}>App preferences and data control</Text>
+      <Text style={styles.title}>{t("settings")}</Text>
+      <Text style={styles.subtitle}>{t("appPreferences")}</Text>
 
-      {/* LANGUAGE SELECTOR */}
       <View style={styles.card}>
-        <Text style={styles.label}>🌍 Language</Text>
-        <Text style={styles.hint}>Select your preferred language.</Text>
+        <Text style={styles.label}>🌍 {t("language")}</Text>
+        <Text style={styles.hint}>{t("selectLanguage")}</Text>
         <View style={styles.langRow}>
           {LANGUAGES.map((lang) => (
-            <TouchableOpacity
-              key={lang.code}
-              style={[styles.langButton, currentLang === lang.code && styles.langButtonActive]}
-              onPress={() => handleLanguageChange(lang.code as Language)}
-            >
-              <Text style={[styles.langButtonText, currentLang === lang.code && styles.langButtonTextActive]}>
-                {lang.label}
-              </Text>
+            <TouchableOpacity key={lang.code} style={[styles.langButton, currentLang === lang.code && styles.langButtonActive]} onPress={() => handleLanguageChange(lang.code as Language)}>
+              <Text style={[styles.langButtonText, currentLang === lang.code && styles.langButtonTextActive]}>{lang.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.label}>Company Name</Text>
+        <Text style={styles.label}>{t("companyName")}</Text>
         <TextInput style={styles.input} value={companyName} onChangeText={setCompanyName} placeholder="Company name" placeholderTextColor="#888" />
         <TouchableOpacity style={styles.saveButton} onPress={saveSettings}>
-          <Text style={styles.buttonText}>Save Settings</Text>
+          <Text style={styles.buttonText}>{t("saveSettings")}</Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.card}>
         <View style={styles.switchRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Dark Mode</Text>
+            <Text style={styles.label}>{t("darkMode")}</Text>
             <Text style={styles.hint}>Saved for the future theme system</Text>
           </View>
           <Switch value={darkMode} onValueChange={setDarkMode} />
@@ -170,38 +157,38 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.label}>👷 Add Worker</Text>
-        <Text style={styles.hint}>Add a worker to your company. They must first create an account with this email.</Text>
-        <TextInput style={styles.input} value={workerEmail} onChangeText={setWorkerEmail} placeholder="Worker email" placeholderTextColor="#888" autoCapitalize="none" keyboardType="email-address" />
+        <Text style={styles.label}>{t("addWorker")}</Text>
+        <Text style={styles.hint}>{t("addWorkerHint")}</Text>
+        <TextInput style={styles.input} value={workerEmail} onChangeText={setWorkerEmail} placeholder={t("workerEmail")} placeholderTextColor="#888" autoCapitalize="none" keyboardType="email-address" />
         <TouchableOpacity style={styles.addWorkerButton} onPress={handleAddWorker} disabled={addingWorker}>
-          <Text style={styles.buttonText}>{addingWorker ? "Adding..." : "Add Worker"}</Text>
+          <Text style={styles.buttonText}>{addingWorker ? t("adding") : t("addWorkerButton")}</Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.label}>Account</Text>
-        <Text style={styles.hint}>You are logged in. Tap below to sign out.</Text>
+        <Text style={styles.label}>{t("account")}</Text>
+        <Text style={styles.hint}>{t("loggedIn")}</Text>
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.buttonText}>Logout</Text>
+          <Text style={styles.buttonText}>{t("logout")}</Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.label}>Backup</Text>
-        <Text style={styles.hint}>Export or import tools, workers, warehouse stock and history.</Text>
+        <Text style={styles.label}>{t("backup")}</Text>
+        <Text style={styles.hint}>{t("backupHint")}</Text>
         <TouchableOpacity style={styles.exportButton} onPress={exportBackup}>
-          <Text style={styles.buttonText}>Export Backup</Text>
+          <Text style={styles.buttonText}>{t("exportBackup")}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.importButton} onPress={importBackup}>
-          <Text style={styles.buttonText}>Import Backup</Text>
+          <Text style={styles.buttonText}>{t("importBackup")}</Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.dangerCard}>
-        <Text style={styles.dangerTitle}>Danger Zone</Text>
-        <Text style={styles.dangerText}>Reset deletes all local app data from this device.</Text>
+        <Text style={styles.dangerTitle}>{t("dangerZone")}</Text>
+        <Text style={styles.dangerText}>{t("resetHint")}</Text>
         <TouchableOpacity style={styles.resetButton} onPress={resetApp}>
-          <Text style={styles.buttonText}>Reset Application</Text>
+          <Text style={styles.buttonText}>{t("resetApp")}</Text>
         </TouchableOpacity>
       </View>
 

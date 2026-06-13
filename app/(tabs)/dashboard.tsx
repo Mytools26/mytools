@@ -10,61 +10,23 @@ import {
 } from "react-native";
 
 import { useToolStore } from "../../toolStore";
-import { t } from "../i18n";
+import { useTranslation } from "../i18n";
 import { exportPdf } from "../utils/pdf";
 
 export default function DashboardScreen() {
   const tools = useToolStore((state) => state.tools || []);
-  // Αυτό κάνει re-render όταν αλλάζει γλώσσα!
-  const language = useToolStore((state) => state.language);
+  const { t } = useTranslation();
 
   const totalTools = tools.length;
   const borrowedTools = tools.filter((tool) => tool.status === "In Use" || tool.borrowedBy || tool.holder).length;
   const availableTools = tools.filter((tool) => tool.status === "Available").length;
   const workers = new Set(tools.map((tool) => tool.borrowedBy || tool.holder).filter(Boolean)).size;
-
   const problemTools = tools.filter((tool) => tool.status === "Missing" || tool.status === "Broken");
   const lowStockTools = tools.filter((tool) => Number(tool.quantity || 0) > 0 && Number(tool.quantity || 0) <= 2);
 
   const exportCompanyPdf = async () => {
-    const assignedRows = tools.map((tool, index) => `
-      <tr>
-        <td>${index + 1}</td>
-        <td>${tool.name}</td>
-        <td>${tool.quantity || "0"}</td>
-        <td>${tool.status || ""}</td>
-        <td>${tool.borrowedBy || tool.holder || "Storage"}</td>
-        <td>${tool.location || ""}</td>
-      </tr>
-    `).join("");
-
-    const html = `
-      <html>
-        <body style="font-family: Arial; padding: 24px;">
-          <h1>${t("appName")} - Company Report</h1>
-          <p><strong>Date:</strong> ${new Date().toLocaleString()}</p>
-          <h2>Summary</h2>
-          <table style="width:100%; border-collapse:collapse;">
-            <tr><td><strong>${t("items")}</strong></td><td>${totalTools}</td></tr>
-            <tr><td><strong>${t("inUse")}</strong></td><td>${borrowedTools}</td></tr>
-            <tr><td><strong>${t("available")}</strong></td><td>${availableTools}</td></tr>
-            <tr><td><strong>${t("workers")}</strong></td><td>${workers}</td></tr>
-          </table>
-          <h2>All Tools</h2>
-          <table style="width:100%; border-collapse:collapse;">
-            <tr>
-              <th style="border:1px solid #333;padding:8px;">#</th>
-              <th style="border:1px solid #333;padding:8px;">Tool</th>
-              <th style="border:1px solid #333;padding:8px;">${t("qty")}</th>
-              <th style="border:1px solid #333;padding:8px;">${t("status")}</th>
-              <th style="border:1px solid #333;padding:8px;">Worker</th>
-              <th style="border:1px solid #333;padding:8px;">Location</th>
-            </tr>
-            ${assignedRows || `<tr><td colspan="6">No tools</td></tr>`}
-          </table>
-        </body>
-      </html>
-    `;
+    const assignedRows = tools.map((tool, index) => `<tr><td>${index + 1}</td><td>${tool.name}</td><td>${tool.quantity || "0"}</td><td>${tool.status || ""}</td><td>${tool.borrowedBy || tool.holder || "Storage"}</td><td>${tool.location || ""}</td></tr>`).join("");
+    const html = `<html><body style="font-family: Arial; padding: 24px;"><h1>${t("appName")} - Company Report</h1><p><strong>Date:</strong> ${new Date().toLocaleString()}</p><h2>Summary</h2><table style="width:100%; border-collapse:collapse;"><tr><td><strong>${t("items")}</strong></td><td>${totalTools}</td></tr><tr><td><strong>${t("inUse")}</strong></td><td>${borrowedTools}</td></tr><tr><td><strong>${t("available")}</strong></td><td>${availableTools}</td></tr><tr><td><strong>${t("workers")}</strong></td><td>${workers}</td></tr></table></body></html>`;
     await exportPdf(html);
   };
 
@@ -78,7 +40,6 @@ export default function DashboardScreen() {
           <Text style={styles.mainButtonIcon}>🔧</Text>
           <Text style={styles.mainButtonText}>{t("assignTool")}</Text>
         </TouchableOpacity>
-
         <TouchableOpacity style={styles.mainButtonGreen} onPress={() => router.push("/(tabs)/borrowed")}>
           <Text style={styles.mainButtonIcon}>↩️</Text>
           <Text style={styles.mainButtonText}>{t("returnTool")}</Text>
@@ -91,22 +52,10 @@ export default function DashboardScreen() {
       </TouchableOpacity>
 
       <View style={styles.statsGrid}>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{totalTools}</Text>
-          <Text style={styles.statLabel}>{t("items")}</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{borrowedTools}</Text>
-          <Text style={styles.statLabel}>{t("inUse")}</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{availableTools}</Text>
-          <Text style={styles.statLabel}>{t("available")}</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{workers}</Text>
-          <Text style={styles.statLabel}>{t("workers")}</Text>
-        </View>
+        <View style={styles.statCard}><Text style={styles.statNumber}>{totalTools}</Text><Text style={styles.statLabel}>{t("items")}</Text></View>
+        <View style={styles.statCard}><Text style={styles.statNumber}>{borrowedTools}</Text><Text style={styles.statLabel}>{t("inUse")}</Text></View>
+        <View style={styles.statCard}><Text style={styles.statNumber}>{availableTools}</Text><Text style={styles.statLabel}>{t("available")}</Text></View>
+        <View style={styles.statCard}><Text style={styles.statNumber}>{workers}</Text><Text style={styles.statLabel}>{t("workers")}</Text></View>
       </View>
 
       {(problemTools.length > 0 || lowStockTools.length > 0) && (
@@ -114,14 +63,10 @@ export default function DashboardScreen() {
           <Text style={styles.sectionTitle}>{t("needsAttention")}</Text>
           <View style={styles.attentionCard}>
             {problemTools.slice(0, 4).map((tool, index) => (
-              <Text key={tool.id || index} style={styles.problemText}>
-                {tool.status}: {tool.name}
-              </Text>
+              <Text key={tool.id || index} style={styles.problemText}>{tool.status}: {tool.name}</Text>
             ))}
             {lowStockTools.slice(0, 4).map((tool, index) => (
-              <Text key={`low-${index}`} style={styles.warningText}>
-                {t("lowStock")}: {tool.name} — {t("qty")} {tool.quantity}
-              </Text>
+              <Text key={`low-${index}`} style={styles.warningText}>{t("lowStock")}: {tool.name} — {t("qty")} {tool.quantity}</Text>
             ))}
           </View>
         </>
@@ -129,18 +74,10 @@ export default function DashboardScreen() {
 
       <Text style={styles.sectionTitle}>{t("more")}</Text>
       <View style={styles.actionGrid}>
-        <TouchableOpacity style={styles.actionCard} onPress={() => router.push("/warehouse")}>
-          <Text style={styles.actionTitle}>📦 {t("warehouse")}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionCard} onPress={() => router.push("/scan")}>
-          <Text style={styles.actionTitle}>📷 {t("scan")}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionCard} onPress={() => router.push("/history")}>
-          <Text style={styles.actionTitle}>📋 {t("history")}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionCard} onPress={exportCompanyPdf}>
-          <Text style={styles.actionTitle}>📄 {t("exportPdf")}</Text>
-        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionCard} onPress={() => router.push("/warehouse")}><Text style={styles.actionTitle}>📦 {t("warehouse")}</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.actionCard} onPress={() => router.push("/scan")}><Text style={styles.actionTitle}>📷 {t("scan")}</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.actionCard} onPress={() => router.push("/history")}><Text style={styles.actionTitle}>📋 {t("history")}</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.actionCard} onPress={exportCompanyPdf}><Text style={styles.actionTitle}>📄 {t("exportPdf")}</Text></TouchableOpacity>
       </View>
 
       <View style={{ height: 70 }} />
