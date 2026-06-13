@@ -2,17 +2,18 @@ import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 
 import {
-    ActivityIndicator,
-    Alert,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 import { useToolStore } from "../toolStore";
 import { cloudReturnTool } from "./cloudSync";
+import { loadLanguage, t } from "./i18n";
 import { supabase } from "./supabase";
 
 export default function WorkerViewScreen() {
@@ -20,8 +21,10 @@ export default function WorkerViewScreen() {
   const [myTools, setMyTools] = useState<any[]>([]);
   const [workerName, setWorkerName] = useState("");
   const [loading, setLoading] = useState(true);
+  const [, forceUpdate] = useState(0);
 
   useEffect(() => {
+    loadLanguage().then(() => forceUpdate(n => n + 1));
     loadMyTools();
   }, []);
 
@@ -30,16 +33,12 @@ export default function WorkerViewScreen() {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-
-      // Παίρνουμε το email ως worker name
       setWorkerName(user.email || "Worker");
-
       const { data } = await supabase
         .from("tools")
         .select("*")
         .eq("user_id", user.id)
         .eq("status", "In Use");
-
       setMyTools(data || []);
     } catch (e) {
       console.error(e);
@@ -49,10 +48,10 @@ export default function WorkerViewScreen() {
   };
 
   const handleReturn = (tool: any) => {
-    Alert.alert("Return Tool", `Return ${tool.name} to warehouse?`, [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("returnTool"), `Return ${tool.name} to warehouse?`, [
+      { text: t("cancel"), style: "cancel" },
       {
-        text: "Return",
+        text: t("return"),
         onPress: async () => {
           returnTool(tool.id);
           await cloudReturnTool(tool.id);
@@ -76,7 +75,7 @@ export default function WorkerViewScreen() {
         <ActivityIndicator color="#ff6b00" size="large" />
       ) : myTools.length === 0 ? (
         <View style={styles.emptyBox}>
-          <Text style={styles.emptyTitle}>No tools assigned</Text>
+          <Text style={styles.emptyTitle}>{t("noToolsYet")}</Text>
           <Text style={styles.emptyText}>Your manager hasn't assigned any tools yet.</Text>
         </View>
       ) : (
@@ -88,22 +87,19 @@ export default function WorkerViewScreen() {
                 {tool.location || "No location"} · x{tool.quantity || "1"}
               </Text>
             </View>
-            <TouchableOpacity
-              style={styles.returnButton}
-              onPress={() => handleReturn(tool)}
-            >
-              <Text style={styles.returnButtonText}>Return</Text>
+            <TouchableOpacity style={styles.returnButton} onPress={() => handleReturn(tool)}>
+              <Text style={styles.returnButtonText}>{t("return")}</Text>
             </TouchableOpacity>
           </View>
         ))
       )}
 
       <TouchableOpacity style={styles.refreshButton} onPress={loadMyTools}>
-        <Text style={styles.refreshButtonText}>Refresh</Text>
+        <Text style={styles.refreshButtonText}>🔄 Refresh</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-        <Text style={styles.logoutButtonText}>Logout</Text>
+        <Text style={styles.logoutButtonText}>{t("logout")}</Text>
       </TouchableOpacity>
 
       <View style={{ height: 60 }} />

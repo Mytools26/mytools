@@ -18,6 +18,7 @@ import {
 
 import { useToolStore } from "../../toolStore";
 import { cloudDeleteTool, cloudUpdateToolQuantity, cloudUpdateToolStatus } from "../cloudSync";
+import { loadLanguage, t } from "../i18n";
 import { supabase } from "../supabase";
 
 const getToolIcon = (image?: string) => {
@@ -50,8 +51,10 @@ export default function InventoryScreen() {
   const [selectedTool, setSelectedTool] = useState<any | null>(null);
   const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
   const [newQuantity, setNewQuantity] = useState("");
+  const [, forceUpdate] = useState(0);
 
   useEffect(() => {
+    loadLanguage().then(() => forceUpdate(n => n + 1));
     loadToolsFromSupabase();
   }, []);
 
@@ -60,7 +63,7 @@ export default function InventoryScreen() {
       setLoading(true);
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
-        Alert.alert("Login Required", "Please login first from Settings.");
+        Alert.alert(t("error"), "Please login first from Settings.");
         return;
       }
       const { data, error } = await supabase
@@ -69,7 +72,7 @@ export default function InventoryScreen() {
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
       if (error) {
-        Alert.alert("Load Error", error.message);
+        Alert.alert(t("error"), error.message);
         return;
       }
       const loadedTools = (data || []).map((item: any) => ({
@@ -89,7 +92,7 @@ export default function InventoryScreen() {
       }));
       setTools(loadedTools);
     } catch (error) {
-      Alert.alert("Error", "Failed to load tools from Supabase.");
+      Alert.alert(t("error"), "Failed to load tools from Supabase.");
     } finally {
       setLoading(false);
     }
@@ -138,10 +141,10 @@ export default function InventoryScreen() {
   return (
     <>
       <ScrollView style={styles.container}>
-        <Text style={styles.title}>Inventory</Text>
+        <Text style={styles.title}>{t("inventory")}</Text>
 
         <TextInput
-          placeholder="Search tool, worker, location..."
+          placeholder={t("searchPlaceholder")}
           placeholderTextColor="#888"
           style={styles.searchInput}
           value={search}
@@ -149,16 +152,16 @@ export default function InventoryScreen() {
         />
 
         <TouchableOpacity style={styles.refreshButton} onPress={loadToolsFromSupabase} disabled={loading}>
-          <Text style={styles.refreshButtonText}>{loading ? "Loading..." : "Refresh from Cloud"}</Text>
+          <Text style={styles.refreshButtonText}>{loading ? t("loading") : t("refreshFromCloud")}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.addButton} onPress={() => router.push("/add-tool")}>
-          <Text style={styles.addButtonText}>+ Add / Assign Tools</Text>
+          <Text style={styles.addButtonText}>{t("addAssignTools")}</Text>
         </TouchableOpacity>
 
         {filteredTools.length === 0 ? (
           <Text style={styles.emptyText}>
-            {loading ? "Loading tools..." : tools.length === 0 ? "No tools yet" : "No results found"}
+            {loading ? t("loading") : tools.length === 0 ? t("noToolsYet") : t("noResultsFound")}
           </Text>
         ) : (
           Object.entries(grouped).map(([profession, categories]) => (
@@ -180,7 +183,7 @@ export default function InventoryScreen() {
                                 <Text style={styles.compactToolName}>{tool.name}</Text>
                                 <Text style={styles.compactMeta}>{(tool.borrowedBy || tool.holder || "Storage") + " · " + (tool.location || "No location")}</Text>
                                 <Text style={[styles.statusText, tool.status === "Missing" && styles.statusMissing, tool.status === "Broken" && styles.statusBroken, tool.status === "Available" && styles.statusAvailable, tool.status === "In Use" && styles.statusInUse]}>
-                                  Status: {tool.status || "Unknown"}
+                                  {t("status")}: {tool.status || "Unknown"}
                                 </Text>
                               </View>
                             </View>
@@ -210,7 +213,7 @@ export default function InventoryScreen() {
                     {(selectedTool?.borrowedBy || selectedTool?.holder || "Storage") + " · " + (selectedTool?.location || "No location")}
                   </Text>
 
-                  <Text style={styles.modalLabel}>Quantity</Text>
+                  <Text style={styles.modalLabel}>{t("quantity")}</Text>
                   <TextInput
                     style={styles.modalInput}
                     value={newQuantity}
@@ -220,7 +223,7 @@ export default function InventoryScreen() {
                     onSubmitEditing={Keyboard.dismiss}
                   />
 
-                  <Text style={styles.modalLabel}>Status</Text>
+                  <Text style={styles.modalLabel}>{t("status")}</Text>
                   <View style={styles.statusRow}>
                     {statuses.map((status) => (
                       <TouchableOpacity
@@ -248,17 +251,17 @@ export default function InventoryScreen() {
                       closeToolModal();
                     }}
                   >
-                    <Text style={styles.modalButtonText}>Save Changes</Text>
+                    <Text style={styles.modalButtonText}>{t("saveChanges")}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     style={styles.deleteModalButton}
                     onPress={() => {
                       if (!selectedToolId) return;
-                      Alert.alert("Delete Tool", `Delete ${selectedTool?.name}?`, [
-                        { text: "Cancel", style: "cancel" },
+                      Alert.alert(t("deleteTool"), `Delete ${selectedTool?.name}?`, [
+                        { text: t("cancel"), style: "cancel" },
                         {
-                          text: "Delete",
+                          text: t("delete"),
                           style: "destructive",
                           onPress: async () => {
                             deleteTool(selectedToolId);
@@ -269,11 +272,11 @@ export default function InventoryScreen() {
                       ]);
                     }}
                   >
-                    <Text style={styles.modalButtonText}>Delete Tool</Text>
+                    <Text style={styles.modalButtonText}>{t("deleteTool")}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity style={styles.closeModalButton} onPress={closeToolModal}>
-                    <Text style={styles.closeModalText}>Close</Text>
+                    <Text style={styles.closeModalText}>{t("close")}</Text>
                   </TouchableOpacity>
                 </View>
               </TouchableWithoutFeedback>

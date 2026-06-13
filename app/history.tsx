@@ -12,6 +12,7 @@ import {
 } from "react-native";
 
 import { useToolStore } from "../toolStore";
+import { loadLanguage, t } from "./i18n";
 import { supabase } from "./supabase";
 
 const getTypeColor = (type: string) => {
@@ -34,8 +35,10 @@ export default function History() {
 
   const [cloudLogs, setCloudLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [, forceUpdate] = useState(0);
 
   useEffect(() => {
+    loadLanguage().then(() => forceUpdate(n => n + 1));
     loadCloudHistory();
   }, []);
 
@@ -44,17 +47,13 @@ export default function History() {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-
       const { data, error } = await supabase
         .from("history_logs")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(100);
-
-      if (!error && data) {
-        setCloudLogs(data);
-      }
+      if (!error && data) setCloudLogs(data);
     } catch (e) {
       console.error(e);
     } finally {
@@ -62,7 +61,6 @@ export default function History() {
     }
   };
 
-  // Merge local + cloud logs
   const localIds = new Set(historyLogs.map((l) => l.id));
   const extraCloudLogs = cloudLogs
     .filter((l) => !localIds.has(l.id))
@@ -87,31 +85,23 @@ export default function History() {
   };
 
   const handleDelete = (id: string) => {
-    Alert.alert("Delete Log", "Delete this history entry?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => deleteLog(id),
-      },
+    Alert.alert(t("delete"), "Delete this history entry?", [
+      { text: t("cancel"), style: "cancel" },
+      { text: t("delete"), style: "destructive", onPress: () => deleteLog(id) },
     ]);
   };
 
   const handleClearAll = () => {
     if (allLogs.length === 0) return;
-    Alert.alert("Clear History", "Delete all history entries?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Clear All",
-        style: "destructive",
-        onPress: clearLogs,
-      },
+    Alert.alert(t("history"), "Delete all history entries?", [
+      { text: t("cancel"), style: "cancel" },
+      { text: "Clear All", style: "destructive", onPress: clearLogs },
     ]);
   };
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.title}>History</Text>
+      <Text style={styles.title}>{t("history")}</Text>
       <Text style={styles.subtitle}>Tool movements and activity</Text>
 
       {loading && <ActivityIndicator color="#ff6b00" style={{ marginBottom: 14 }} />}
@@ -123,7 +113,7 @@ export default function History() {
       )}
 
       {allLogs.length === 0 && !loading ? (
-        <Text style={styles.emptyText}>No history yet</Text>
+        <Text style={styles.emptyText}>{t("noToolsYet")}</Text>
       ) : (
         allLogs.map((log) => (
           <View key={log.id} style={styles.card}>
@@ -131,12 +121,8 @@ export default function History() {
               <View style={[styles.typeBadge, { backgroundColor: getTypeColor(log.type) }]}>
                 <Text style={styles.typeText}>{log.type}</Text>
               </View>
-
-              <TouchableOpacity
-                style={styles.deleteSmallButton}
-                onPress={() => handleDelete(log.id)}
-              >
-                <Text style={styles.deleteSmallButtonText}>Delete</Text>
+              <TouchableOpacity style={styles.deleteSmallButton} onPress={() => handleDelete(log.id)}>
+                <Text style={styles.deleteSmallButtonText}>{t("delete")}</Text>
               </TouchableOpacity>
             </View>
 
@@ -144,7 +130,7 @@ export default function History() {
 
             <View style={styles.metaBox}>
               <Text style={styles.meta}>Tool: {log.toolName || "Unknown"}</Text>
-              {log.quantity ? <Text style={styles.meta}>Quantity: {log.quantity}</Text> : null}
+              {log.quantity ? <Text style={styles.meta}>{t("quantity")}: {log.quantity}</Text> : null}
               {log.workerName ? <Text style={styles.meta}>Worker: {log.workerName}</Text> : null}
               {log.location ? <Text style={styles.meta}>Location: {log.location}</Text> : null}
               <Text style={styles.date}>{formatDate(log.createdAt)}</Text>
@@ -154,7 +140,7 @@ export default function History() {
       )}
 
       <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-        <Text style={styles.backButtonText}>Back</Text>
+        <Text style={styles.backButtonText}>{t("back")}</Text>
       </TouchableOpacity>
 
       <View style={{ height: 60 }} />

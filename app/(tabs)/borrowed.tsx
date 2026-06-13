@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 import {
   Alert,
@@ -13,6 +13,7 @@ import {
 
 import { useToolStore } from "../../toolStore";
 import { cloudReturnTool } from "../cloudSync";
+import { loadLanguage, t } from "../i18n";
 
 export default function BorrowedScreen() {
   const tools = useToolStore((state) => state.tools || []);
@@ -23,10 +24,13 @@ export default function BorrowedScreen() {
   const [copyingWorker, setCopyingWorker] = useState<string | null>(null);
   const [newWorkerName, setNewWorkerName] = useState("");
   const [newLocation, setNewLocation] = useState("");
+  const [, forceUpdate] = useState(0);
 
-  const borrowedTools = tools.filter(
-    (tool) => tool.status === "In Use" || tool.holder || tool.borrowedBy
-  );
+  useEffect(() => {
+    loadLanguage().then(() => forceUpdate(n => n + 1));
+  }, []);
+
+  const borrowedTools = tools.filter((tool) => tool.status === "In Use" || tool.holder || tool.borrowedBy);
 
   const groupedByWorker = borrowedTools.reduce((acc, tool) => {
     const workerName = tool.borrowedBy || tool.holder || "Unknown Worker";
@@ -49,12 +53,12 @@ export default function BorrowedScreen() {
 
   const handleReturnAll = (workerName: string, workerTools: typeof borrowedTools) => {
     Alert.alert(
-      "Return All Tools",
+      t("returnTool"),
       `Return all tools from ${workerName} to warehouse?`,
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("cancel"), style: "cancel" },
         {
-          text: "Return All",
+          text: t("returnAll"),
           onPress: async () => {
             for (const [index, tool] of workerTools.entries()) {
               const realId = tool.id || `old-tool-${index}`;
@@ -69,12 +73,12 @@ export default function BorrowedScreen() {
 
   const deleteWorkerGroup = (workerName: string, workerTools: typeof borrowedTools) => {
     Alert.alert(
-      "Delete Worker Group",
+      t("delete"),
       `Delete ${workerName} and all assigned tools?`,
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("cancel"), style: "cancel" },
         {
-          text: "Delete",
+          text: t("delete"),
           style: "destructive",
           onPress: () => {
             workerTools.forEach((tool, index) => {
@@ -89,38 +93,38 @@ export default function BorrowedScreen() {
 
   const copyGroup = (workerName: string) => {
     if (!newWorkerName.trim()) {
-      Alert.alert("Error", "Enter worker name");
+      Alert.alert(t("error"), "Enter worker name");
       return;
     }
     duplicateWorkerGroup(workerName, newWorkerName.trim(), newLocation.trim());
     setCopyingWorker(null);
     setNewWorkerName("");
     setNewLocation("");
-    Alert.alert("Success", "Worker group copied");
+    Alert.alert(t("success"), "Worker group copied");
   };
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.title}>Workers</Text>
-      <Text style={styles.subtitle}>Active worker assignments</Text>
+      <Text style={styles.title}>{t("workers")}</Text>
+      <Text style={styles.subtitle}>{t("workerAssignments")}</Text>
 
       <View style={styles.summaryCard}>
         <View style={styles.summaryBox}>
           <Text style={styles.summaryNumber}>{Object.keys(groupedByWorker).length}</Text>
-          <Text style={styles.summaryLabel}>Workers</Text>
+          <Text style={styles.summaryLabel}>{t("workers")}</Text>
         </View>
         <View style={styles.summaryBox}>
           <Text style={styles.summaryNumber}>{borrowedTools.length}</Text>
-          <Text style={styles.summaryLabel}>Tool Lines</Text>
+          <Text style={styles.summaryLabel}>{t("toolLines")}</Text>
         </View>
         <View style={styles.summaryBox}>
           <Text style={styles.summaryNumber}>{getTotalQuantity(borrowedTools)}</Text>
-          <Text style={styles.summaryLabel}>Total Qty</Text>
+          <Text style={styles.summaryLabel}>{t("totalQty")}</Text>
         </View>
       </View>
 
       {borrowedTools.length === 0 ? (
-        <Text style={styles.emptyText}>No borrowed tools</Text>
+        <Text style={styles.emptyText}>{t("noBorrowedTools")}</Text>
       ) : (
         Object.entries(groupedByWorker).map(([workerName, workerTools]) => {
           const location = getWorkerLocation(workerTools);
@@ -132,12 +136,7 @@ export default function BorrowedScreen() {
             <View key={workerName} style={styles.workerCard}>
               <TouchableOpacity
                 activeOpacity={0.85}
-                onPress={() =>
-                  router.push({
-                    pathname: "/worker-details",
-                    params: { workerName },
-                  } as any)
-                }
+                onPress={() => router.push({ pathname: "/worker-details", params: { workerName } } as any)}
               >
                 <View style={styles.topRow}>
                   <View style={{ flex: 1 }}>
@@ -156,15 +155,15 @@ export default function BorrowedScreen() {
                   </View>
                   <View style={styles.smallStat}>
                     <Text style={styles.smallStatNumber}>{totalQuantity}</Text>
-                    <Text style={styles.smallStatLabel}>Qty</Text>
+                    <Text style={styles.smallStatLabel}>{t("qty")}</Text>
                   </View>
                   <View style={styles.smallStat}>
                     <Text style={styles.problemNumber}>{brokenCount}</Text>
-                    <Text style={styles.smallStatLabel}>Broken</Text>
+                    <Text style={styles.smallStatLabel}>{t("broken")}</Text>
                   </View>
                   <View style={styles.smallStat}>
                     <Text style={styles.warningNumber}>{missingCount}</Text>
-                    <Text style={styles.smallStatLabel}>Missing</Text>
+                    <Text style={styles.smallStatLabel}>{t("missing")}</Text>
                   </View>
                 </View>
 
@@ -192,34 +191,23 @@ export default function BorrowedScreen() {
                   />
                   <View style={styles.actionRow}>
                     <TouchableOpacity style={styles.saveButton} onPress={() => copyGroup(workerName)}>
-                      <Text style={styles.buttonText}>Save Copy</Text>
+                      <Text style={styles.buttonText}>{t("saved")}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.cancelButton} onPress={() => { setCopyingWorker(null); setNewWorkerName(""); setNewLocation(""); }}>
-                      <Text style={styles.buttonText}>Cancel</Text>
+                      <Text style={styles.buttonText}>{t("cancel")}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
               ) : (
                 <View style={styles.actionRow}>
-                  <TouchableOpacity
-                    style={styles.returnAllButton}
-                    onPress={() => handleReturnAll(workerName, workerTools)}
-                  >
-                    <Text style={styles.buttonText}>↩️ Return All</Text>
+                  <TouchableOpacity style={styles.returnAllButton} onPress={() => handleReturnAll(workerName, workerTools)}>
+                    <Text style={styles.buttonText}>{t("returnAll")}</Text>
                   </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.copyButton}
-                    onPress={() => setCopyingWorker(workerName)}
-                  >
-                    <Text style={styles.buttonText}>Copy</Text>
+                  <TouchableOpacity style={styles.copyButton} onPress={() => setCopyingWorker(workerName)}>
+                    <Text style={styles.buttonText}>{t("copy")}</Text>
                   </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={() => deleteWorkerGroup(workerName, workerTools)}
-                  >
-                    <Text style={styles.buttonText}>Delete</Text>
+                  <TouchableOpacity style={styles.deleteButton} onPress={() => deleteWorkerGroup(workerName, workerTools)}>
+                    <Text style={styles.buttonText}>{t("delete")}</Text>
                   </TouchableOpacity>
                 </View>
               )}
