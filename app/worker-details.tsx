@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 
 import {
   Alert,
@@ -13,7 +13,7 @@ import {
 
 import { useToolStore } from "../toolStore";
 import { cloudDeleteTool, cloudReturnTool, cloudUpdateToolQuantity } from "./cloudSync";
-import { loadLanguage, t } from "./i18n";
+import { t } from "./i18n";
 import { exportPdf } from "./utils/pdf";
 
 const getStatusColor = (status?: string) => {
@@ -45,15 +45,11 @@ export default function WorkerDetailsScreen() {
   const deleteTool = useToolStore((state) => state.deleteTool);
   const updateTool = useToolStore((state) => state.updateTool);
   const returnTool = useToolStore((state) => state.returnTool);
+  const language = useToolStore((state) => state.language); // auto re-render
 
   const workerNameText = String(workerName || "Unknown worker");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newQuantity, setNewQuantity] = useState("");
-  const [, forceUpdate] = useState(0);
-
-  useEffect(() => {
-    loadLanguage().then(() => forceUpdate(n => n + 1));
-  }, []);
 
   const workerTools = useMemo(
     () => tools.filter((tool) => tool.borrowedBy === workerNameText || tool.holder === workerNameText),
@@ -66,53 +62,9 @@ export default function WorkerDetailsScreen() {
   const missingCount = workerTools.filter((tool) => tool.status === "Missing").length;
 
   const exportWorkerPdf = async () => {
-    if (workerTools.length === 0) {
-      Alert.alert(t("error"), "This worker has no assigned tools.");
-      return;
-    }
-
-    const rows = workerTools.map((tool, index) => `
-      <tr>
-        <td>${index + 1}</td>
-        <td>${tool.name}</td>
-        <td>${tool.quantity || "0"}</td>
-        <td>${tool.status || ""}</td>
-        <td>${tool.location || ""}</td>
-      </tr>
-    `).join("");
-
-    const html = `
-      <html>
-        <body style="font-family: Arial; padding: 24px;">
-          <h1>${t("appName")} - Worker Report</h1>
-          <p><strong>Worker:</strong> ${workerNameText}</p>
-          <p><strong>Location:</strong> ${location}</p>
-          <p><strong>Date:</strong> ${new Date().toLocaleString()}</p>
-          <h2>Summary</h2>
-          <table style="width: 100%; border-collapse: collapse;">
-            <tr><td><strong>Tool Lines</strong></td><td>${workerTools.length}</td></tr>
-            <tr><td><strong>${t("totalQty")}</strong></td><td>${totalQuantity}</td></tr>
-            <tr><td><strong>${t("broken")}</strong></td><td>${brokenCount}</td></tr>
-            <tr><td><strong>${t("missing")}</strong></td><td>${missingCount}</td></tr>
-          </table>
-          <h2 style="margin-top: 30px;">Assigned Tools</h2>
-          <table style="width: 100%; border-collapse: collapse;">
-            <tr>
-              <th style="border: 1px solid #333; padding: 8px;">#</th>
-              <th style="border: 1px solid #333; padding: 8px;">Tool</th>
-              <th style="border: 1px solid #333; padding: 8px;">${t("qty")}</th>
-              <th style="border: 1px solid #333; padding: 8px;">${t("status")}</th>
-              <th style="border: 1px solid #333; padding: 8px;">Location</th>
-            </tr>
-            ${rows}
-          </table>
-          <div style="margin-top: 70px;">
-            <p><strong>Worker Signature:</strong> ______________________</p>
-            <p><strong>Manager Signature:</strong> _____________________</p>
-          </div>
-        </body>
-      </html>
-    `;
+    if (workerTools.length === 0) { Alert.alert(t("error"), "This worker has no assigned tools."); return; }
+    const rows = workerTools.map((tool, index) => `<tr><td>${index + 1}</td><td>${tool.name}</td><td>${tool.quantity || "0"}</td><td>${tool.status || ""}</td><td>${tool.location || ""}</td></tr>`).join("");
+    const html = `<html><body style="font-family: Arial; padding: 24px;"><h1>${t("appName")} - Worker Report</h1><p><strong>Worker:</strong> ${workerNameText}</p><p><strong>Location:</strong> ${location}</p><p><strong>Date:</strong> ${new Date().toLocaleString()}</p><h2>Summary</h2><table style="width: 100%; border-collapse: collapse;"><tr><td><strong>Tool Lines</strong></td><td>${workerTools.length}</td></tr><tr><td><strong>${t("totalQty")}</strong></td><td>${totalQuantity}</td></tr><tr><td><strong>${t("broken")}</strong></td><td>${brokenCount}</td></tr><tr><td><strong>${t("missing")}</strong></td><td>${missingCount}</td></tr></table><h2 style="margin-top: 30px;">Assigned Tools</h2><table style="width: 100%; border-collapse: collapse;"><tr><th style="border: 1px solid #333; padding: 8px;">#</th><th style="border: 1px solid #333; padding: 8px;">Tool</th><th style="border: 1px solid #333; padding: 8px;">${t("qty")}</th><th style="border: 1px solid #333; padding: 8px;">${t("status")}</th><th style="border: 1px solid #333; padding: 8px;">Location</th></tr>${rows}</table><div style="margin-top: 70px;"><p><strong>Worker Signature:</strong> ______________________</p><p><strong>Manager Signature:</strong> _____________________</p></div></body></html>`;
     await exportPdf(html);
   };
 
@@ -202,7 +154,6 @@ export default function WorkerDetailsScreen() {
         workerTools.map((tool, index) => {
           const realId = tool.id || `old-tool-${index}`;
           const isEditing = editingId === realId;
-
           return (
             <View key={realId} style={styles.toolCard}>
               <View style={styles.toolTop}>
@@ -217,7 +168,6 @@ export default function WorkerDetailsScreen() {
                   <Text style={styles.statusText}>{tool.status || "Unknown"}</Text>
                 </View>
               </View>
-
               <View style={styles.middleRow}>
                 <Text style={styles.locationText}>{tool.location || "No location"}</Text>
                 {isEditing ? (
@@ -228,7 +178,6 @@ export default function WorkerDetailsScreen() {
                   </View>
                 )}
               </View>
-
               {isEditing ? (
                 <View style={styles.actionRow}>
                   <TouchableOpacity style={styles.saveButton} onPress={() => saveEdit(tool, realId)}>
@@ -255,7 +204,6 @@ export default function WorkerDetailsScreen() {
           );
         })
       )}
-
       <View style={{ height: 80 }} />
     </ScrollView>
   );

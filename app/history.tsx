@@ -12,7 +12,7 @@ import {
 } from "react-native";
 
 import { useToolStore } from "../toolStore";
-import { loadLanguage, t } from "./i18n";
+import { t } from "./i18n";
 import { supabase } from "./supabase";
 
 const getTypeColor = (type: string) => {
@@ -32,13 +32,12 @@ export default function History() {
   const historyLogs = useToolStore((state) => state.historyLogs || []);
   const deleteLog = useToolStore((state) => state.deleteHistoryLog);
   const clearLogs = useToolStore((state) => state.clearHistoryLogs);
+  const language = useToolStore((state) => state.language); // auto re-render
 
   const [cloudLogs, setCloudLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [, forceUpdate] = useState(0);
 
   useEffect(() => {
-    loadLanguage().then(() => forceUpdate(n => n + 1));
     loadCloudHistory();
   }, []);
 
@@ -65,14 +64,9 @@ export default function History() {
   const extraCloudLogs = cloudLogs
     .filter((l) => !localIds.has(l.id))
     .map((l) => ({
-      id: l.id,
-      type: l.type || "ADD",
-      toolName: l.tool_name || "",
-      quantity: l.quantity || "",
-      workerName: l.worker_name || "",
-      location: l.location || "",
-      message: l.message || "",
-      createdAt: l.created_at || "",
+      id: l.id, type: l.type || "ADD", toolName: l.tool_name || "",
+      quantity: l.quantity || "", workerName: l.worker_name || "",
+      location: l.location || "", message: l.message || "", createdAt: l.created_at || "",
     }));
 
   const allLogs = [...historyLogs, ...extraCloudLogs].sort(
@@ -125,9 +119,7 @@ export default function History() {
                 <Text style={styles.deleteSmallButtonText}>{t("delete")}</Text>
               </TouchableOpacity>
             </View>
-
             <Text style={styles.message}>{log.message}</Text>
-
             <View style={styles.metaBox}>
               <Text style={styles.meta}>Tool: {log.toolName || "Unknown"}</Text>
               {log.quantity ? <Text style={styles.meta}>{t("quantity")}: {log.quantity}</Text> : null}

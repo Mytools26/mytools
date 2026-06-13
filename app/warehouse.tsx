@@ -12,7 +12,7 @@ import {
 } from "react-native";
 
 import { useToolStore } from "../toolStore";
-import { loadLanguage, t } from "./i18n";
+import { t } from "./i18n";
 import { supabase } from "./supabase";
 import toolCatalog from "./toolCatalog";
 
@@ -59,15 +59,14 @@ export default function WarehouseScreen() {
   const tools = useToolStore((state) => state.tools || []);
   const customTools = useToolStore((state) => state.customTools || []);
   const addCustomTool = useToolStore((state) => state.addCustomTool);
+  const language = useToolStore((state) => state.language); // auto re-render
 
   const [profession, setProfession] = useState(professions[0] || "Electrician");
   const [search, setSearch] = useState("");
   const [quantity, setQuantity] = useState("");
   const [draftStock, setDraftStock] = useState<Record<string, string>>({});
-  const [, forceUpdate] = useState(0);
 
   useEffect(() => {
-    loadLanguage().then(() => forceUpdate(n => n + 1));
     loadWarehouseStock();
   }, []);
 
@@ -123,12 +122,10 @@ export default function WarehouseScreen() {
     const toolName = search.trim();
     if (!toolName) { Alert.alert(t("error"), "Enter tool name"); return; }
     if (!quantity.trim()) { Alert.alert(t("error"), "Enter quantity"); return; }
-
     const existingTool = allTools.find((tool) => tool.name.toLowerCase() === toolName.toLowerCase());
     if (!existingTool) {
       addCustomTool({ id: `${Date.now()}-${toolName}`, name: toolName, profession, category: guessCategory(toolName), image: getAutoImage(toolName) });
     }
-
     setWarehouseQuantity(toolName, quantity.trim());
     const { error } = await supabase.from("warehouse_stock").upsert({ tool_name: toolName, quantity: Number(quantity.trim()) }, { onConflict: "tool_name" });
     if (error) { Alert.alert(t("error"), error.message); return; }
@@ -151,7 +148,6 @@ export default function WarehouseScreen() {
             </TouchableOpacity>
           ))}
         </ScrollView>
-
         <TextInput placeholder="Search or add tool..." placeholderTextColor="#888" style={styles.input} value={search} onChangeText={setSearch} />
         <TextInput placeholder={t("quantity")} placeholderTextColor="#888" style={styles.input} value={quantity} onChangeText={setQuantity} keyboardType="numeric" />
         <TouchableOpacity style={styles.addButton} onPress={saveSmartTool}>
@@ -167,7 +163,6 @@ export default function WarehouseScreen() {
             const assigned = getAssignedQuantity(toolName);
             const available = getAvailableQuantity(toolName);
             const status = getToolStatus(toolName);
-
             return (
               <View key={toolName} style={styles.toolCard}>
                 <View style={styles.leftBox}>

@@ -115,7 +115,6 @@ const translations = {
 };
 
 const LANGUAGE_KEY = "mytools-language";
-let currentLanguage: Language = "en";
 
 const getDeviceLanguage = (): Language => {
   const locale = Platform.OS === "ios"
@@ -129,21 +128,31 @@ const getDeviceLanguage = (): Language => {
 export const loadLanguage = async () => {
   const saved = await AsyncStorage.getItem(LANGUAGE_KEY);
   if (saved && (saved === "en" || saved === "el" || saved === "de")) {
-    currentLanguage = saved as Language;
+    const { useToolStore } = require("../toolStore");
+    useToolStore.getState().setLanguage(saved as Language);
   } else {
-    currentLanguage = getDeviceLanguage();
+    const lang = getDeviceLanguage();
+    const { useToolStore } = require("../toolStore");
+    useToolStore.getState().setLanguage(lang);
   }
 };
 
 export const setLanguage = async (lang: Language) => {
-  currentLanguage = lang;
   await AsyncStorage.setItem(LANGUAGE_KEY, lang);
+  const { useToolStore } = require("../toolStore");
+  useToolStore.getState().setLanguage(lang);
 };
 
-export const getLanguage = (): Language => currentLanguage;
+export const getLanguage = (): Language => {
+  const { useToolStore } = require("../toolStore");
+  return useToolStore.getState().language;
+};
 
+// Διαβάζει γλώσσα από Zustand — αλλάζει αμέσως παντού!
 export const t = (key: keyof typeof translations.en): string => {
-  return translations[currentLanguage]?.[key] || translations.en[key] || key;
+  const { useToolStore } = require("../toolStore");
+  const lang = useToolStore.getState().language as Language;
+  return translations[lang]?.[key] || translations.en[key] || key;
 };
 
 export default translations;

@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 
 import {
   Alert,
@@ -13,22 +13,18 @@ import {
 
 import { useToolStore } from "../../toolStore";
 import { cloudReturnTool } from "../cloudSync";
-import { loadLanguage, t } from "../i18n";
+import { t } from "../i18n";
 
 export default function BorrowedScreen() {
   const tools = useToolStore((state) => state.tools || []);
   const deleteTool = useToolStore((state) => state.deleteTool);
   const returnTool = useToolStore((state) => state.returnTool);
   const duplicateWorkerGroup = useToolStore((state) => state.duplicateWorkerGroup);
+  const language = useToolStore((state) => state.language); // auto re-render on language change
 
   const [copyingWorker, setCopyingWorker] = useState<string | null>(null);
   const [newWorkerName, setNewWorkerName] = useState("");
   const [newLocation, setNewLocation] = useState("");
-  const [, forceUpdate] = useState(0);
-
-  useEffect(() => {
-    loadLanguage().then(() => forceUpdate(n => n + 1));
-  }, []);
 
   const borrowedTools = tools.filter((tool) => tool.status === "In Use" || tool.holder || tool.borrowedBy);
 
@@ -52,50 +48,39 @@ export default function BorrowedScreen() {
     workerTools.filter((tool) => tool.status === "Missing").length;
 
   const handleReturnAll = (workerName: string, workerTools: typeof borrowedTools) => {
-    Alert.alert(
-      t("returnTool"),
-      `Return all tools from ${workerName} to warehouse?`,
-      [
-        { text: t("cancel"), style: "cancel" },
-        {
-          text: t("returnAll"),
-          onPress: async () => {
-            for (const [index, tool] of workerTools.entries()) {
-              const realId = tool.id || `old-tool-${index}`;
-              returnTool(realId);
-              await cloudReturnTool(realId);
-            }
-          },
+    Alert.alert(t("returnTool"), `Return all tools from ${workerName} to warehouse?`, [
+      { text: t("cancel"), style: "cancel" },
+      {
+        text: t("returnAll"),
+        onPress: async () => {
+          for (const [index, tool] of workerTools.entries()) {
+            const realId = tool.id || `old-tool-${index}`;
+            returnTool(realId);
+            await cloudReturnTool(realId);
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const deleteWorkerGroup = (workerName: string, workerTools: typeof borrowedTools) => {
-    Alert.alert(
-      t("delete"),
-      `Delete ${workerName} and all assigned tools?`,
-      [
-        { text: t("cancel"), style: "cancel" },
-        {
-          text: t("delete"),
-          style: "destructive",
-          onPress: () => {
-            workerTools.forEach((tool, index) => {
-              const realId = tool.id || `old-tool-${index}`;
-              deleteTool(realId);
-            });
-          },
+    Alert.alert(t("delete"), `Delete ${workerName} and all assigned tools?`, [
+      { text: t("cancel"), style: "cancel" },
+      {
+        text: t("delete"),
+        style: "destructive",
+        onPress: () => {
+          workerTools.forEach((tool, index) => {
+            const realId = tool.id || `old-tool-${index}`;
+            deleteTool(realId);
+          });
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const copyGroup = (workerName: string) => {
-    if (!newWorkerName.trim()) {
-      Alert.alert(t("error"), "Enter worker name");
-      return;
-    }
+    if (!newWorkerName.trim()) { Alert.alert(t("error"), "Enter worker name"); return; }
     duplicateWorkerGroup(workerName, newWorkerName.trim(), newLocation.trim());
     setCopyingWorker(null);
     setNewWorkerName("");
@@ -134,10 +119,7 @@ export default function BorrowedScreen() {
 
           return (
             <View key={workerName} style={styles.workerCard}>
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => router.push({ pathname: "/worker-details", params: { workerName } } as any)}
-              >
+              <TouchableOpacity activeOpacity={0.85} onPress={() => router.push({ pathname: "/worker-details", params: { workerName } } as any)}>
                 <View style={styles.topRow}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.workerName}>{workerName}</Text>
@@ -175,20 +157,8 @@ export default function BorrowedScreen() {
 
               {copyingWorker === workerName ? (
                 <View style={styles.copyBox}>
-                  <TextInput
-                    placeholder="New worker name"
-                    placeholderTextColor="#888"
-                    style={styles.input}
-                    value={newWorkerName}
-                    onChangeText={setNewWorkerName}
-                  />
-                  <TextInput
-                    placeholder="New location / project"
-                    placeholderTextColor="#888"
-                    style={styles.input}
-                    value={newLocation}
-                    onChangeText={setNewLocation}
-                  />
+                  <TextInput placeholder="New worker name" placeholderTextColor="#888" style={styles.input} value={newWorkerName} onChangeText={setNewWorkerName} />
+                  <TextInput placeholder="New location / project" placeholderTextColor="#888" style={styles.input} value={newLocation} onChangeText={setNewLocation} />
                   <View style={styles.actionRow}>
                     <TouchableOpacity style={styles.saveButton} onPress={() => copyGroup(workerName)}>
                       <Text style={styles.buttonText}>{t("saved")}</Text>

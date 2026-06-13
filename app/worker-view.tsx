@@ -13,18 +13,17 @@ import {
 
 import { useToolStore } from "../toolStore";
 import { cloudReturnTool } from "./cloudSync";
-import { loadLanguage, t } from "./i18n";
+import { t } from "./i18n";
 import { supabase } from "./supabase";
 
 export default function WorkerViewScreen() {
   const returnTool = useToolStore((state) => state.returnTool);
+  const language = useToolStore((state) => state.language); // auto re-render
   const [myTools, setMyTools] = useState<any[]>([]);
   const [workerName, setWorkerName] = useState("");
   const [loading, setLoading] = useState(true);
-  const [, forceUpdate] = useState(0);
 
   useEffect(() => {
-    loadLanguage().then(() => forceUpdate(n => n + 1));
     loadMyTools();
   }, []);
 
@@ -34,11 +33,7 @@ export default function WorkerViewScreen() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       setWorkerName(user.email || "Worker");
-      const { data } = await supabase
-        .from("tools")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("status", "In Use");
+      const { data } = await supabase.from("tools").select("*").eq("user_id", user.id).eq("status", "In Use");
       setMyTools(data || []);
     } catch (e) {
       console.error(e);
@@ -50,14 +45,7 @@ export default function WorkerViewScreen() {
   const handleReturn = (tool: any) => {
     Alert.alert(t("returnTool"), `Return ${tool.name} to warehouse?`, [
       { text: t("cancel"), style: "cancel" },
-      {
-        text: t("return"),
-        onPress: async () => {
-          returnTool(tool.id);
-          await cloudReturnTool(tool.id);
-          loadMyTools();
-        },
-      },
+      { text: t("return"), onPress: async () => { returnTool(tool.id); await cloudReturnTool(tool.id); loadMyTools(); } },
     ]);
   };
 
@@ -83,9 +71,7 @@ export default function WorkerViewScreen() {
           <View key={tool.id} style={styles.toolCard}>
             <View style={styles.toolInfo}>
               <Text style={styles.toolName}>{tool.name}</Text>
-              <Text style={styles.toolMeta}>
-                {tool.location || "No location"} · x{tool.quantity || "1"}
-              </Text>
+              <Text style={styles.toolMeta}>{tool.location || "No location"} · x{tool.quantity || "1"}</Text>
             </View>
             <TouchableOpacity style={styles.returnButton} onPress={() => handleReturn(tool)}>
               <Text style={styles.returnButtonText}>{t("return")}</Text>
