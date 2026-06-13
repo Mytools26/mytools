@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React from "react";
 
 import {
   ScrollView,
@@ -10,25 +10,21 @@ import {
 } from "react-native";
 
 import { useToolStore } from "../../toolStore";
-import { loadLanguage, t } from "../i18n";
+import { t } from "../i18n";
 import { exportPdf } from "../utils/pdf";
 
 export default function DashboardScreen() {
   const tools = useToolStore((state) => state.tools || []);
-  const historyLogs = useToolStore((state) => state.historyLogs || []);
-  const [, forceUpdate] = useState(0);
-
-  useEffect(() => {
-    loadLanguage().then(() => forceUpdate(n => n + 1));
-  }, []);
+  // Αυτό κάνει re-render όταν αλλάζει γλώσσα!
+  const language = useToolStore((state) => state.language);
 
   const totalTools = tools.length;
-  const borrowedTools = tools.filter((t) => t.status === "In Use" || t.borrowedBy || t.holder).length;
-  const availableTools = tools.filter((t) => t.status === "Available").length;
-  const workers = new Set(tools.map((t) => t.borrowedBy || t.holder).filter(Boolean)).size;
+  const borrowedTools = tools.filter((tool) => tool.status === "In Use" || tool.borrowedBy || tool.holder).length;
+  const availableTools = tools.filter((tool) => tool.status === "Available").length;
+  const workers = new Set(tools.map((tool) => tool.borrowedBy || tool.holder).filter(Boolean)).size;
 
-  const problemTools = tools.filter((t) => t.status === "Missing" || t.status === "Broken");
-  const lowStockTools = tools.filter((t) => Number(t.quantity || 0) > 0 && Number(t.quantity || 0) <= 2);
+  const problemTools = tools.filter((tool) => tool.status === "Missing" || tool.status === "Broken");
+  const lowStockTools = tools.filter((tool) => Number(tool.quantity || 0) > 0 && Number(tool.quantity || 0) <= 2);
 
   const exportCompanyPdf = async () => {
     const assignedRows = tools.map((tool, index) => `

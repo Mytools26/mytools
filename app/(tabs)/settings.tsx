@@ -15,7 +15,8 @@ import {
   View,
 } from "react-native";
 
-import { getLanguage, Language, loadLanguage, setLanguage } from "../i18n";
+import { useToolStore } from "../../toolStore";
+import { Language, loadLanguage, setLanguage } from "../i18n";
 import { supabase } from "../supabase";
 
 const SETTINGS_KEY = "my-tools-settings";
@@ -32,11 +33,14 @@ export default function SettingsScreen() {
   const [darkMode, setDarkMode] = useState(true);
   const [workerEmail, setWorkerEmail] = useState("");
   const [addingWorker, setAddingWorker] = useState(false);
-  const [currentLang, setCurrentLang] = useState<Language>("en");
+
+  // Γλώσσα από Zustand — όταν αλλάζει ενημερώνονται ΟΛΟΙ
+  const currentLang = useToolStore((state) => state.language);
+  const setStoreLang = useToolStore((state) => state.setLanguage);
 
   useEffect(() => {
     loadSettings();
-    loadLanguage().then(() => setCurrentLang(getLanguage()));
+    loadLanguage().then(() => {});
   }, []);
 
   const loadSettings = async () => {
@@ -49,17 +53,14 @@ export default function SettingsScreen() {
   };
 
   const saveSettings = async () => {
-    await AsyncStorage.setItem(
-      SETTINGS_KEY,
-      JSON.stringify({ companyName, darkMode })
-    );
+    await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify({ companyName, darkMode }));
     Alert.alert("Saved", "Settings saved successfully.");
   };
 
   const handleLanguageChange = async (lang: Language) => {
-    await setLanguage(lang);
-    setCurrentLang(lang);
-    Alert.alert("✅", "Language changed! Restart the app to see all changes.");
+    await setLanguage(lang);  // Αποθηκεύει στο AsyncStorage
+    setStoreLang(lang);        // Ενημερώνει ΟΛΑ τα screens αμέσως!
+    Alert.alert("✅", lang === "el" ? "Γλώσσα άλλαξε!" : lang === "de" ? "Sprache geändert!" : "Language changed!");
   };
 
   const handleAddWorker = async () => {
@@ -67,51 +68,19 @@ export default function SettingsScreen() {
       Alert.alert("Error", "Enter worker email.");
       return;
     }
-
     setAddingWorker(true);
-
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-
-      const { data: memberData } = await supabase
-        .from("company_members")
-        .select("company_id")
-        .eq("user_id", user.id)
-        .single();
-
-      if (!memberData?.company_id) {
-        Alert.alert("Error", "Company not found.");
-        return;
-      }
-
-      const { data: workerData, error: workerError } = await supabase
-        .from("auth.users")
-        .select("id")
-        .eq("email", workerEmail.trim())
-        .single();
-
+      const { data: memberData } = await supabase.from("company_members").select("company_id").eq("user_id", user.id).single();
+      if (!memberData?.company_id) { Alert.alert("Error", "Company not found."); return; }
+      const { data: workerData, error: workerError } = await supabase.from("auth.users").select("id").eq("email", workerEmail.trim()).single();
       if (workerError || !workerData) {
-        Alert.alert(
-          "Worker Not Found",
-          `No account found for ${workerEmail}. Ask the worker to Register first with this email, then you can add them.`
-        );
+        Alert.alert("Worker Not Found", `No account found for ${workerEmail}. Ask the worker to Register first with this email, then you can add them.`);
         return;
       }
-
-      const { error: insertError } = await supabase
-        .from("company_members")
-        .insert({
-          company_id: memberData.company_id,
-          user_id: workerData.id,
-          role: "worker",
-        });
-
-      if (insertError) {
-        Alert.alert("Error", insertError.message);
-        return;
-      }
-
+      const { error: insertError } = await supabase.from("company_members").insert({ company_id: memberData.company_id, user_id: workerData.id, role: "worker" });
+      if (insertError) { Alert.alert("Error", insertError.message); return; }
       Alert.alert("Success", `${workerEmail} added as worker!`);
       setWorkerEmail("");
     } catch (e) {
@@ -124,50 +93,27 @@ export default function SettingsScreen() {
   const handleLogout = async () => {
     Alert.alert("Logout", "Are you sure you want to logout?", [
       { text: "Cancel", style: "cancel" },
-      {
-        text: "Logout",
-        style: "destructive",
-        onPress: async () => {
-          await supabase.auth.signOut();
-          router.replace("/login");
-        },
-      },
+      { text: "Logout", style: "destructive", onPress: async () => { await supabase.auth.signOut(); router.replace("/login"); } },
     ]);
   };
 
   const exportBackup = async () => {
     const appData = await AsyncStorage.getItem(STORAGE_KEY);
     const settingsData = await AsyncStorage.getItem(SETTINGS_KEY);
-    const backup = {
-      app: "MyTools",
-      version: "1.0",
-      exportedAt: new Date().toISOString(),
-      settings: settingsData ? JSON.parse(settingsData) : null,
-      storage: appData ? JSON.parse(appData) : null,
-    };
-    await Share.share({
-      title: "MyTools Backup",
-      message: JSON.stringify(backup, null, 2),
-    });
+    const backup = { app: "MyTools", version: "1.0", exportedAt: new Date().toISOString(), settings: settingsData ? JSON.parse(settingsData) : null, storage: appData ? JSON.parse(appData) : null };
+    await Share.share({ title: "MyTools Backup", message: JSON.stringify(backup, null, 2) });
   };
 
   const importBackup = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: "application/json",
-        copyToCacheDirectory: true,
-      });
+      const result = await DocumentPicker.getDocumentAsync({ type: "application/json", copyToCacheDirectory: true });
       if (result.canceled) return;
       const file = result.assets[0];
       const response = await fetch(file.uri);
       const text = await response.text();
       const parsed = JSON.parse(text);
-      if (parsed.settings) {
-        await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(parsed.settings));
-      }
-      if (parsed.storage) {
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(parsed.storage));
-      }
+      if (parsed.settings) await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(parsed.settings));
+      if (parsed.storage) await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(parsed.storage));
       Alert.alert("Import Complete", "Backup restored. Restart Expo.");
     } catch (error) {
       Alert.alert("Import Failed", "Invalid backup file.");
@@ -175,21 +121,10 @@ export default function SettingsScreen() {
   };
 
   const resetApp = async () => {
-    Alert.alert(
-      "Reset Application",
-      "This will delete all tools, workers, warehouse stock and history. Continue?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Reset",
-          style: "destructive",
-          onPress: async () => {
-            await AsyncStorage.clear();
-            Alert.alert("Done", "All app data deleted. Restart Expo.");
-          },
-        },
-      ]
-    );
+    Alert.alert("Reset Application", "This will delete all tools, workers, warehouse stock and history. Continue?", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Reset", style: "destructive", onPress: async () => { await AsyncStorage.clear(); Alert.alert("Done", "All app data deleted. Restart Expo."); } },
+    ]);
   };
 
   return (
@@ -205,16 +140,10 @@ export default function SettingsScreen() {
           {LANGUAGES.map((lang) => (
             <TouchableOpacity
               key={lang.code}
-              style={[
-                styles.langButton,
-                currentLang === lang.code && styles.langButtonActive,
-              ]}
+              style={[styles.langButton, currentLang === lang.code && styles.langButtonActive]}
               onPress={() => handleLanguageChange(lang.code as Language)}
             >
-              <Text style={[
-                styles.langButtonText,
-                currentLang === lang.code && styles.langButtonTextActive,
-              ]}>
+              <Text style={[styles.langButtonText, currentLang === lang.code && styles.langButtonTextActive]}>
                 {lang.label}
               </Text>
             </TouchableOpacity>
@@ -224,13 +153,7 @@ export default function SettingsScreen() {
 
       <View style={styles.card}>
         <Text style={styles.label}>Company Name</Text>
-        <TextInput
-          style={styles.input}
-          value={companyName}
-          onChangeText={setCompanyName}
-          placeholder="Company name"
-          placeholderTextColor="#888"
-        />
+        <TextInput style={styles.input} value={companyName} onChangeText={setCompanyName} placeholder="Company name" placeholderTextColor="#888" />
         <TouchableOpacity style={styles.saveButton} onPress={saveSettings}>
           <Text style={styles.buttonText}>Save Settings</Text>
         </TouchableOpacity>
@@ -248,26 +171,10 @@ export default function SettingsScreen() {
 
       <View style={styles.card}>
         <Text style={styles.label}>👷 Add Worker</Text>
-        <Text style={styles.hint}>
-          Add a worker to your company. They must first create an account with this email.
-        </Text>
-        <TextInput
-          style={styles.input}
-          value={workerEmail}
-          onChangeText={setWorkerEmail}
-          placeholder="Worker email"
-          placeholderTextColor="#888"
-          autoCapitalize="none"
-          keyboardType="email-address"
-        />
-        <TouchableOpacity
-          style={styles.addWorkerButton}
-          onPress={handleAddWorker}
-          disabled={addingWorker}
-        >
-          <Text style={styles.buttonText}>
-            {addingWorker ? "Adding..." : "Add Worker"}
-          </Text>
+        <Text style={styles.hint}>Add a worker to your company. They must first create an account with this email.</Text>
+        <TextInput style={styles.input} value={workerEmail} onChangeText={setWorkerEmail} placeholder="Worker email" placeholderTextColor="#888" autoCapitalize="none" keyboardType="email-address" />
+        <TouchableOpacity style={styles.addWorkerButton} onPress={handleAddWorker} disabled={addingWorker}>
+          <Text style={styles.buttonText}>{addingWorker ? "Adding..." : "Add Worker"}</Text>
         </TouchableOpacity>
       </View>
 
