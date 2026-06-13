@@ -15,19 +15,28 @@ import {
   View,
 } from "react-native";
 
+import { getLanguage, Language, loadLanguage, setLanguage } from "../i18n";
 import { supabase } from "../supabase";
 
 const SETTINGS_KEY = "my-tools-settings";
 const STORAGE_KEY = "my-tools-storage";
+
+const LANGUAGES = [
+  { code: "en", label: "🇬🇧 English" },
+  { code: "el", label: "🇬🇷 Ελληνικά" },
+  { code: "de", label: "🇩🇪 Deutsch" },
+];
 
 export default function SettingsScreen() {
   const [companyName, setCompanyName] = useState("MyTools Company");
   const [darkMode, setDarkMode] = useState(true);
   const [workerEmail, setWorkerEmail] = useState("");
   const [addingWorker, setAddingWorker] = useState(false);
+  const [currentLang, setCurrentLang] = useState<Language>("en");
 
   useEffect(() => {
     loadSettings();
+    loadLanguage().then(() => setCurrentLang(getLanguage()));
   }, []);
 
   const loadSettings = async () => {
@@ -47,6 +56,12 @@ export default function SettingsScreen() {
     Alert.alert("Saved", "Settings saved successfully.");
   };
 
+  const handleLanguageChange = async (lang: Language) => {
+    await setLanguage(lang);
+    setCurrentLang(lang);
+    Alert.alert("✅", "Language changed! Restart the app to see all changes.");
+  };
+
   const handleAddWorker = async () => {
     if (!workerEmail.trim()) {
       Alert.alert("Error", "Enter worker email.");
@@ -56,11 +71,9 @@ export default function SettingsScreen() {
     setAddingWorker(true);
 
     try {
-      // Βρίσκουμε τον user με αυτό το email
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Βρίσκουμε την εταιρεία του manager
       const { data: memberData } = await supabase
         .from("company_members")
         .select("company_id")
@@ -72,7 +85,6 @@ export default function SettingsScreen() {
         return;
       }
 
-      // Ψάχνουμε τον worker με το email
       const { data: workerData, error: workerError } = await supabase
         .from("auth.users")
         .select("id")
@@ -80,7 +92,6 @@ export default function SettingsScreen() {
         .single();
 
       if (workerError || !workerData) {
-        // Αν δεν βρεθεί, δημιουργούμε invite link
         Alert.alert(
           "Worker Not Found",
           `No account found for ${workerEmail}. Ask the worker to Register first with this email, then you can add them.`
@@ -88,7 +99,6 @@ export default function SettingsScreen() {
         return;
       }
 
-      // Προσθέτουμε τον worker στην εταιρεία
       const { error: insertError } = await supabase
         .from("company_members")
         .insert({
@@ -187,6 +197,31 @@ export default function SettingsScreen() {
       <Text style={styles.title}>Settings</Text>
       <Text style={styles.subtitle}>App preferences and data control</Text>
 
+      {/* LANGUAGE SELECTOR */}
+      <View style={styles.card}>
+        <Text style={styles.label}>🌍 Language</Text>
+        <Text style={styles.hint}>Select your preferred language.</Text>
+        <View style={styles.langRow}>
+          {LANGUAGES.map((lang) => (
+            <TouchableOpacity
+              key={lang.code}
+              style={[
+                styles.langButton,
+                currentLang === lang.code && styles.langButtonActive,
+              ]}
+              onPress={() => handleLanguageChange(lang.code as Language)}
+            >
+              <Text style={[
+                styles.langButtonText,
+                currentLang === lang.code && styles.langButtonTextActive,
+              ]}>
+                {lang.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
       <View style={styles.card}>
         <Text style={styles.label}>Company Name</Text>
         <TextInput
@@ -238,9 +273,7 @@ export default function SettingsScreen() {
 
       <View style={styles.card}>
         <Text style={styles.label}>Account</Text>
-        <Text style={styles.hint}>
-          You are logged in. Tap below to sign out.
-        </Text>
+        <Text style={styles.hint}>You are logged in. Tap below to sign out.</Text>
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.buttonText}>Logout</Text>
         </TouchableOpacity>
@@ -248,9 +281,7 @@ export default function SettingsScreen() {
 
       <View style={styles.card}>
         <Text style={styles.label}>Backup</Text>
-        <Text style={styles.hint}>
-          Export or import tools, workers, warehouse stock and history.
-        </Text>
+        <Text style={styles.hint}>Export or import tools, workers, warehouse stock and history.</Text>
         <TouchableOpacity style={styles.exportButton} onPress={exportBackup}>
           <Text style={styles.buttonText}>Export Backup</Text>
         </TouchableOpacity>
@@ -261,9 +292,7 @@ export default function SettingsScreen() {
 
       <View style={styles.dangerCard}>
         <Text style={styles.dangerTitle}>Danger Zone</Text>
-        <Text style={styles.dangerText}>
-          Reset deletes all local app data from this device.
-        </Text>
+        <Text style={styles.dangerText}>Reset deletes all local app data from this device.</Text>
         <TouchableOpacity style={styles.resetButton} onPress={resetApp}>
           <Text style={styles.buttonText}>Reset Application</Text>
         </TouchableOpacity>
@@ -283,6 +312,11 @@ const styles = StyleSheet.create({
   hint: { color: "#9ca3af", fontSize: 13, lineHeight: 18, marginBottom: 12 },
   input: { backgroundColor: "#020b1f", borderRadius: 12, padding: 14, color: "white", fontSize: 16, borderWidth: 1, borderColor: "#374151" },
   switchRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  langRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  langButton: { backgroundColor: "#020b1f", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "#374151", marginBottom: 8 },
+  langButtonActive: { backgroundColor: "#ff6b00", borderColor: "#ff6b00" },
+  langButtonText: { color: "#9ca3af", fontSize: 14, fontWeight: "bold" },
+  langButtonTextActive: { color: "white" },
   saveButton: { backgroundColor: "#ff6b00", padding: 14, borderRadius: 13, alignItems: "center", marginTop: 14 },
   addWorkerButton: { backgroundColor: "#7c3aed", padding: 14, borderRadius: 13, alignItems: "center", marginTop: 14 },
   logoutButton: { backgroundColor: "#7f1d1d", padding: 14, borderRadius: 13, alignItems: "center", marginTop: 4 },
