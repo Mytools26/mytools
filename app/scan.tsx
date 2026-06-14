@@ -69,19 +69,17 @@ export default function ScanScreen() {
       setResult(null);
       setAiResponse("");
 
-      // Βγάζουμε φωτογραφία
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.5,
         base64: true,
         skipProcessing: true,
       });
 
-      // Στέλνουμε στο Claude API για αναγνώριση
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": "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",
+          "x-api-key": process.env.EXPO_PUBLIC_CLAUDE_KEY || "",
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
@@ -124,7 +122,6 @@ If you cannot identify a tool, use: {"name": "Unknown Tool", "category": "Genera
         setResult(parsed);
         Alert.alert("✅ Detected!", `${parsed.icon} ${parsed.name} (${parsed.confidence} confidence)`);
       } catch {
-        // Αν δεν μπορέσει να κάνει parse, ψάχνουμε για JSON μέσα στο text
         const jsonMatch = text.match(/\{.*\}/s);
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
